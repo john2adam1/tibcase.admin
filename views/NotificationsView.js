@@ -4,45 +4,61 @@ import { DataService } from '../lib/api';
 
 export const NotificationsView = ({ onShowToast }) => {
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     title: '',
-    body: '',
-    audience: 'all'
+    body: ''
   });
   const [isSending, setIsSending] = useState(false);
 
+  const loadData = () => {
+    setLoading(true);
+    DataService.getNotifications()
+      .then(res => {
+        setHistory(Array.isArray(res) ? res : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setHistory([]);
+        setLoading(false);
+      });
+  };
+
   useEffect(() => {
-    setHistory(DataService.getNotifications());
+    loadData();
   }, []);
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
     if (!form.title || !form.body) return;
 
     setIsSending(true);
-    setTimeout(() => {
+    try {
+      await DataService.sendNotification(form);
+      setForm({ title: '', body: '' });
+      onShowToast("Bildirishnoma yuborildi!", "success");
+      loadData();
+    } catch (err) {
+      onShowToast(err.message || "Yuborishda xatolik", "error");
+    } finally {
       setIsSending(false);
-      DataService.sendNotification(form);
-      setHistory(DataService.getNotifications());
-      setForm({ title: '', body: '', audience: 'all' });
-      onShowToast("Push bildirishnoma barcha foydalanuvchilarga yuborildi!", "success");
-    }, 700);
+    }
   };
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div>
-        <h2 style={{ fontSize: '1.35rem', color: '#fff', fontWeight: '800' }}>Push Bildirishnomalar Tarqatish</h2>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          Foydalanuvchilarning telefonlariga yangi keyslar, musobaqalar va aksiyalar haqida xabar yuborish
+        <h2 style={{ fontSize: '1.25rem', color: '#fff', fontWeight: '700' }}>Push Bildirishnomalar</h2>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          GET /web/notification
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
         {/* Form */}
-        <div className="glass-panel" style={{ padding: '22px' }}>
-          <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-            Yangi Xabar Yaratish
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '1rem', fontWeight: '700', color: '#fff', marginBottom: '14px' }}>
+            Yangi Bildirishnoma Yuborish
           </div>
 
           <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -51,7 +67,6 @@ export const NotificationsView = ({ onShowToast }) => {
               <input
                 className="form-input"
                 required
-                placeholder="Masalan: Yangi EKG keysi chiqdi!"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
@@ -63,24 +78,9 @@ export const NotificationsView = ({ onShowToast }) => {
                 className="form-textarea"
                 required
                 rows={4}
-                placeholder="O'tkir koronar sindrom bo'yicha yangi klinik keysni yechib, 250 XP ishlang..."
                 value={form.body}
                 onChange={(e) => setForm({ ...form, body: e.target.value })}
               />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Auditoriya:</label>
-              <select
-                className="form-select"
-                value={form.audience}
-                onChange={(e) => setForm({ ...form, audience: e.target.value })}
-              >
-                <option value="all">Barcha foydalanuvchilar (14,800+)</option>
-                <option value="doctor">Faqat Shifokorlar (3,200+)</option>
-                <option value="student">Tibbiyot Talabalari (11,600+)</option>
-                <option value="pro">Faqat Pro Obunachilar</option>
-              </select>
             </div>
 
             <button
@@ -90,33 +90,39 @@ export const NotificationsView = ({ onShowToast }) => {
               style={{ width: '100%', padding: '10px' }}
             >
               <Icon name="send" size={16} />
-              <span>{isSending ? "Tarqatilmoqda..." : "Push Xabarni Yuborish"}</span>
+              <span>{isSending ? "Yuborilmoqda..." : "Yuborish"}</span>
             </button>
           </form>
         </div>
 
         {/* History */}
-        <div className="glass-panel" style={{ padding: '22px' }}>
-          <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '1rem', fontWeight: '700', color: '#fff', marginBottom: '14px' }}>
             Yuborilgan Xabarlar Tarixi
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {history.map(item => (
-              <div key={item.id} style={{ padding: '14px', background: 'var(--bg-input)', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <strong style={{ color: '#fff', fontSize: '0.9rem' }}>{item.title}</strong>
-                  <span className="badge badge-emerald">✓ {item.sent_count} ta yetkazildi</span>
+          {loading ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              Yuklanmoqda...
+            </div>
+          ) : history.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              Hozircha yuborilgan xabarlar mavjud emas.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {history.map((item, idx) => (
+                <div key={item.id || idx} style={{ padding: '12px', background: 'var(--bg-input)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontWeight: '600', color: '#fff', fontSize: '0.88rem', marginBottom: '4px' }}>
+                    {item.title}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {item.body}
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                  {item.body}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                  Yuborilgan vaqt: {new Date(item.sent_at).toLocaleString()}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

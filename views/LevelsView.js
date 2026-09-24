@@ -1,49 +1,70 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '../components/Icons';
-import { INITIAL_LEVELS } from '../lib/mockData';
+import { DataService } from '../lib/api';
 
 export const LevelsView = () => {
+  const [levels, setLevels] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    DataService.getLevels()
+      .then(res => {
+        setLevels(Array.isArray(res) ? res : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLevels([]);
+        setLoading(false);
+      });
+  }, []);
+
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '1.35rem', color: '#fff', fontWeight: '800' }}>Levellar & XP Reyting Tizimi</h2>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Talabalar va shifokorlarning klinik tajribasi (Gamification & XP thresholds)
-          </div>
+      <div>
+        <h2 style={{ fontSize: '1.25rem', color: '#fff', fontWeight: '700' }}>Levellar (XP)</h2>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          GET /web/level
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-        {INITIAL_LEVELS.map(lvl => (
-          <div key={lvl.level} className="glass-panel" style={{ padding: '20px', position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-              <div style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '12px',
-                background: 'rgba(6, 182, 212, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Icon name="award" size={22} color="var(--accent-cyan)" />
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          Yuklanmoqda...
+        </div>
+      ) : levels.length === 0 ? (
+        <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          Hozircha levellar mavjud emas.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+          {levels.map((lvl, idx) => (
+            <div key={lvl.id || idx} className="glass-panel" style={{ padding: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'rgba(6, 182, 212, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Icon name="award" size={18} color="var(--accent-cyan)" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#fff' }}>{lvl.name || `Level ${lvl.level}`}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>Level {lvl.level}</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#fff' }}>{lvl.name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', fontWeight: '600' }}>Daraja: Level {lvl.level}</div>
-              </div>
-            </div>
 
-            <div style={{ padding: '10px 14px', background: 'var(--bg-input)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Kerakli Tajriba Bali (XP):</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#fff', marginTop: '2px' }}>
-                {lvl.min_xp.toLocaleString()} — {lvl.max_xp.toLocaleString()} XP
+              <div style={{ padding: '8px 12px', background: 'var(--bg-input)', borderRadius: '6px', fontSize: '0.8rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>XP oraliq: </span>
+                <strong style={{ color: '#fff' }}>{lvl.min_xp} — {lvl.max_xp}</strong>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

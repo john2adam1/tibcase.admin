@@ -1,60 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '../components/Icons';
-import { INITIAL_ADMINS } from '../lib/mockData';
+import { DataService } from '../lib/api';
+import { Modal } from '../components/Modal';
 
 export const AdminsView = ({ onShowToast }) => {
-  const [admins] = useState(INITIAL_ADMINS);
-  const [roles] = useState([
-    {
-      id: 'role-super',
-      name: 'Super Admin',
-      description: 'Barcha ruxsatlarga ega: keyslar, tariflar, moliya, adminlar va AI sozlamalari.',
-      users_count: 1
-    },
-    {
-      id: 'role-editor',
-      name: 'Klinik Muharrir (Medical Doctor Lead)',
-      description: 'Klinik keyslar yaratish, tibbiy stsenariylarni tasdiqlash va AI promptlarini sinash.',
-      users_count: 2
-    },
-    {
-      id: 'role-support',
-      name: 'Qo\'llab-quvvatlash (Support Specialist)',
-      description: 'Foydalanuvchilar murojaatlari, to\'lovlar va FAQ bo\'limini boshqarish.',
-      users_count: 3
+  const [admins, setAdmins] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [form, setForm] = useState({
+    login: '',
+    password: '',
+    role_id: '',
+    partner_id: ''
+  });
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [adminsRes, rolesRes] = await Promise.all([
+        DataService.getAdmins(),
+        DataService.getRoles()
+      ]);
+      setAdmins(Array.isArray(adminsRes) ? adminsRes : []);
+      setRoles(Array.isArray(rolesRes) ? rolesRes : []);
+    } catch {
+      setAdmins([]);
+      setRoles([]);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    try {
+      await DataService.createAdmin(form);
+      setIsModalOpen(false);
+      onShowToast("Admin muvaffaqiyatli qo'shildi!", "success");
+      loadData();
+    } catch (err) {
+      onShowToast(err.message || "Xatolik", "error");
+    }
+  };
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontSize: '1.35rem', color: '#fff', fontWeight: '800' }}>Adminlar & Rollar (RBAC)</h2>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Admin panel xodimlari, rollar va ruxsatlar matritsasi
+          <h2 style={{ fontSize: '1.25rem', color: '#fff', fontWeight: '700' }}>Adminlar & Rollar</h2>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            GET /web/admin & GET /web/role
           </div>
         </div>
-        <button onClick={() => onShowToast("Yangi admin taklif qilish oynasi", "info")} className="btn-primary">
+        <button onClick={() => setIsModalOpen(true)} className="btn-primary">
           <Icon name="plus" size={16} />
-          <span>+ Yangi Xodim Qo'shish</span>
+          <span>+ Yangi Admin</span>
         </button>
       </div>
 
-      {/* Admin Users Table */}
-      <div className="glass-panel" style={{ padding: '20px' }}>
-        <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#fff', marginBottom: '14px' }}>
-          Tizim Administratorlari
-        </div>
-
-        <div className="data-table-container">
+      <div className="data-table-container">
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Yuklanmoqda...
+          </div>
+        ) : admins.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Hozircha adminlar ro'yxati mavjud emas.
+          </div>
+        ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Admin E-pochta / Login</th>
+                <th>Login</th>
                 <th>Roli</th>
-                <th>Filial / Hamkor OTM</th>
-                <th>Ro'yxatdan o'tgan</th>
-                <th>Holat</th>
+                <th>Hamkor</th>
+                <th>Sana</th>
               </tr>
             </thead>
             <tbody>
@@ -64,43 +90,66 @@ export const AdminsView = ({ onShowToast }) => {
                     {a.login}
                   </td>
                   <td>
-                    <span className="badge badge-cyan">{a.role}</span>
+                    <span className="badge badge-cyan">{a.role_name || a.role_id || '—'}</span>
                   </td>
                   <td style={{ color: 'var(--text-secondary)' }}>
-                    {a.partner_name}
+                    {a.partner_name || a.partner_id || '—'}
                   </td>
-                  <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    {new Date(a.created_at).toLocaleDateString()}
-                  </td>
-                  <td>
-                    <span className="badge badge-emerald">Faol</span>
+                  <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        )}
       </div>
 
-      {/* RBAC Roles Matrix */}
-      <div>
-        <h3 style={{ fontSize: '1.05rem', color: '#fff', marginBottom: '14px' }}>
-          Rollar va Ruxsatlar Tizimi (RBAC)
-        </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-          {roles.map(r => (
-            <div key={r.id} className="glass-panel" style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '1rem', fontWeight: '700', color: '#fff' }}>{r.name}</span>
-                <span className="badge badge-slate">{r.users_count} xodim</span>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                {r.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Yangi Admin Qo'shish" maxWidth="450px">
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div className="form-group">
+            <label className="form-label">Login / Email:</label>
+            <input
+              type="text"
+              className="form-input"
+              required
+              value={form.login}
+              onChange={(e) => setForm({ ...form, login: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Parol:</label>
+            <input
+              type="password"
+              className="form-input"
+              required
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Rol:</label>
+            <select
+              className="form-select"
+              required
+              value={form.role_id}
+              onChange={(e) => setForm({ ...form, role_id: e.target.value })}
+            >
+              <option value="">Rolni tanlang</option>
+              {roles.map(r => (
+                <option key={r.id} value={r.id}>{r.name || r.id}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">Bekor qilish</button>
+            <button type="submit" className="btn-primary">Saqlash</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

@@ -58,11 +58,11 @@ export const CaseEditorModal = ({
         subtitle: caseItem.subtitle || { uz: '', ru: '', en: '' },
         chief_complaint: caseItem.chief_complaint || { uz: '', ru: '', en: '' },
         initial_vitals: caseItem.initial_vitals || {
-          blood_pressure: '120/80 mmHg',
-          heart_rate: 76,
-          temperature: 36.6,
-          spo2: 98,
-          respiratory_rate: 16
+          blood_pressure: '',
+          heart_rate: '',
+          temperature: '',
+          spo2: '',
+          respiratory_rate: ''
         },
         scenario: caseItem.scenario || {
           patient_history: '',
@@ -77,7 +77,7 @@ export const CaseEditorModal = ({
       if (caseItem.scenario?.lab_tests) {
         setRawLabText(JSON.stringify(caseItem.scenario.lab_tests, null, 2));
       } else {
-        setRawLabText('{\n  "troponin_i": "< 0.04 ng/ml",\n  "glucose": "5.5 mmol/l",\n  "leukocytes": "6.8 x 10^9/l"\n}');
+        setRawLabText('{}');
       }
 
       setRawDiffText((caseItem.scenario?.differential_diagnoses || []).join('\n'));
@@ -92,30 +92,30 @@ export const CaseEditorModal = ({
         topic_id: topics[0]?.id || '',
         difficulty: 'medium',
         status: 'draft',
-        patient_age: 45,
+        patient_age: '',
         patient_gender: 'male',
         visual_state: 'normal',
         expected_duration_minutes: 15,
         order_num: 1,
-        cover_image_url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&auto=format&fit=crop&q=60',
+        cover_image_url: '',
         expected_answer: '',
         initial_vitals: {
-          blood_pressure: '120/80 mmHg',
-          heart_rate: 76,
-          temperature: 36.6,
-          spo2: 98,
-          respiratory_rate: 16
+          blood_pressure: '',
+          heart_rate: '',
+          temperature: '',
+          spo2: '',
+          respiratory_rate: ''
         },
         scenario: {
           patient_history: '',
           physical_exam: '',
           ecg_findings: '',
-          lab_tests: { "glucose": "5.4 mmol/l" },
+          lab_tests: {},
           differential_diagnoses: [],
           treatment_steps: []
         }
       });
-      setRawLabText('{\n  "troponin_i": "< 0.04 ng/ml",\n  "glucose": "5.5 mmol/l"\n}');
+      setRawLabText('{}');
       setRawDiffText('');
       setRawTreatmentText('');
     }

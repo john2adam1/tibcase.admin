@@ -7,6 +7,7 @@ export const TopicsView = ({ onShowToast, lang = 'uz' }) => {
   const [topics, setTopics] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCatFilter, setSelectedCatFilter] = useState('');
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -16,18 +17,25 @@ export const TopicsView = ({ onShowToast, lang = 'uz' }) => {
     order_num: 1
   });
 
-  const loadData = () => {
-    setTopics(DataService.getTopics());
-    setCategories(DataService.getCategories());
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [topsRes, catsRes] = await Promise.all([
+        DataService.getTopics(selectedCatFilter),
+        DataService.getCategories()
+      ]);
+      setTopics(Array.isArray(topsRes) ? topsRes : []);
+      setCategories(Array.isArray(catsRes) ? catsRes : []);
+    } catch {
+      setTopics([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadData();
-  }, []);
-
-  const filteredTopics = selectedCatFilter
-    ? topics.filter(t => t.category_id === selectedCatFilter)
-    : topics;
+  }, [selectedCatFilter]);
 
   const openCreate = () => {
     setEditingItem(null);
@@ -49,152 +57,148 @@ export const TopicsView = ({ onShowToast, lang = 'uz' }) => {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    DataService.saveTopic({
-      ...editingItem,
-      ...form
-    });
-    setIsModalOpen(false);
-    loadData();
-    onShowToast("Mavzu muvaffaqiyatli saqlandi!", "success");
+    try {
+      if (editingItem?.id) {
+        await DataService.updateTopic(editingItem.id, form);
+        onShowToast("Mavzu yangilandi!", "success");
+      } else {
+        await DataService.createTopic(form);
+        onShowToast("Yangi mavzu yaratildi!", "success");
+      }
+      setIsModalOpen(false);
+      loadData();
+    } catch (err) {
+      onShowToast(err.message || "Saqlashda xatolik", "error");
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm("Rostdan ham ushbu mavzuni o'chirmoqchimisiz?")) {
-      DataService.deleteTopic(id);
-      loadData();
-      onShowToast("Mavzu o'chirildi.", "warning");
+      try {
+        await DataService.deleteTopic(id);
+        onShowToast("Mavzu o'chirildi.", "info");
+        loadData();
+      } catch (err) {
+        onShowToast(err.message || "O'chirishda xatolik", "error");
+      }
     }
   };
 
   const getCategoryName = (catId) => {
     const c = categories.find(cat => cat.id === catId);
-    return c ? (c.name?.[lang] || c.name?.uz) : '—';
+    return c ? (c.name?.[lang] || c.name?.uz || c.name) : '—';
   };
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontSize: '1.35rem', color: '#fff', fontWeight: '800' }}>Tibbiy Mavzular (Topics)</h2>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Bo'limlar ostidagi ixtisoslashgan patologiyalar va nozologiyalar
+          <h2 style={{ fontSize: '1.25rem', color: '#fff', fontWeight: '700' }}>Tibbiy Mavzular</h2>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            GET /web/topic
           </div>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <select
             className="form-select"
-            style={{ width: '220px' }}
+            style={{ width: '200px' }}
             value={selectedCatFilter}
             onChange={(e) => setSelectedCatFilter(e.target.value)}
           >
             <option value="">Barcha Bo'limlar</option>
             {categories.map(c => (
-              <option key={c.id} value={c.id}>{c.name?.[lang] || c.name?.uz}</option>
+              <option key={c.id} value={c.id}>{c.name?.[lang] || c.name?.uz || c.name}</option>
             ))}
           </select>
           <button onClick={openCreate} className="btn-primary">
             <Icon name="plus" size={16} />
-            <span>Yangi Mavzu Qo'shish</span>
+            <span>+ Yangi Mavzu</span>
           </button>
         </div>
       </div>
 
       <div className="data-table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Tartib</th>
-              <th>Mavzu Nomi</th>
-              <th>Tegishli Bo'lim</th>
-              <th style={{ textAlign: 'right' }}>Amallar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTopics.map(t => (
-              <tr key={t.id}>
-                <td style={{ width: '60px', fontWeight: '700', color: 'var(--accent-cyan)' }}>
-                  #{t.order_num}
-                </td>
-                <td>
-                  <div style={{ fontWeight: '600', color: '#fff' }}>{t.name?.[lang] || t.name?.uz}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    RU: {t.name?.ru || '—'} | EN: {t.name?.en || '—'}
-                  </div>
-                </td>
-                <td>
-                  <span className="badge badge-slate">{getCategoryName(t.category_id)}</span>
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'inline-flex', gap: '6px' }}>
-                    <button onClick={() => openEdit(t)} className="btn-icon" title="Tahrirlash">
-                      <Icon name="edit" size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(t.id)} className="btn-icon" style={{ color: 'var(--accent-rose)' }} title="O'chirish">
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </div>
-                </td>
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Yuklanmoqda...
+          </div>
+        ) : topics.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Hozircha mavzular mavjud emas.
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Tartib</th>
+                <th>Nomi</th>
+                <th>Bo'lim</th>
+                <th style={{ textAlign: 'right' }}>Amallar</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {topics.map(t => (
+                <tr key={t.id}>
+                  <td style={{ width: '60px', fontWeight: '700', color: 'var(--accent-cyan)' }}>
+                    #{t.order_num}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: '600', color: '#fff' }}>
+                      {typeof t.name === 'string' ? t.name : (t.name?.[lang] || t.name?.uz || '')}
+                    </div>
+                  </td>
+                  <td>
+                    <span className="badge badge-slate">{getCategoryName(t.category_id)}</span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', gap: '6px' }}>
+                      <button onClick={() => openEdit(t)} className="btn-icon" title="Tahrirlash">
+                        <Icon name="edit" size={15} />
+                      </button>
+                      <button onClick={() => handleDelete(t.id)} className="btn-icon" style={{ color: 'var(--accent-rose)' }} title="O'chirish">
+                        <Icon name="trash" size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Topic CRUD Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingItem ? "Mavzuni Tahrirlash" : "Yangi Mavzu Qo'shish"}
-        maxWidth="550px"
+        maxWidth="500px"
       >
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div className="form-group">
-            <label className="form-label">Tegishli Bo'lim (Kategoriya):</label>
+            <label className="form-label">Tegishli Bo'lim:</label>
             <select
               className="form-select"
               required
               value={form.category_id}
               onChange={(e) => setForm({ ...form, category_id: e.target.value })}
             >
-              <option value="">Bo'limni tanlang</option>
+              <option value="">Tanlang</option>
               {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name?.[lang] || c.name?.uz}</option>
+                <option key={c.id} value={c.id}>{c.name?.[lang] || c.name?.uz || c.name}</option>
               ))}
             </select>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Mavzu Nomi (O'zbekcha):</label>
+            <label className="form-label">Mavzu Nomi (UZ):</label>
             <input
               className="form-input"
               required
-              placeholder="Masalan: O'tkir Koronar Sindrom (OKS)"
               value={form.name.uz}
               onChange={(e) => setForm({ ...form, name: { ...form.name, uz: e.target.value } })}
             />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label className="form-label">Mavzu Nomi (Русский):</label>
-              <input
-                className="form-input"
-                placeholder="Острый коронарный синдром"
-                value={form.name.ru || ''}
-                onChange={(e) => setForm({ ...form, name: { ...form.name, ru: e.target.value } })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Mavzu Nomi (English):</label>
-              <input
-                className="form-input"
-                placeholder="Acute Coronary Syndrome"
-                value={form.name.en || ''}
-                onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.target.value } })}
-              />
-            </div>
           </div>
 
           <div className="form-group">

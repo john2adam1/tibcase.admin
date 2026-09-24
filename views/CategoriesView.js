@@ -5,6 +5,7 @@ import { Modal } from '../components/Modal';
 
 export const CategoriesView = ({ onShowToast, lang = 'uz' }) => {
   const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -16,7 +17,16 @@ export const CategoriesView = ({ onShowToast, lang = 'uz' }) => {
   });
 
   const loadData = () => {
-    setCategories(DataService.getCategories());
+    setLoading(true);
+    DataService.getCategories()
+      .then(res => {
+        setCategories(Array.isArray(res) ? res : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setCategories([]);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -45,149 +55,145 @@ export const CategoriesView = ({ onShowToast, lang = 'uz' }) => {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    DataService.saveCategory({
-      ...editingItem,
-      ...form
-    });
-    setIsModalOpen(false);
-    loadData();
-    onShowToast("Bo'lim muvaffaqiyatli saqlandi!", "success");
+    try {
+      if (editingItem?.id) {
+        await DataService.updateCategory(editingItem.id, form);
+        onShowToast("Bo'lim yangilandi!", "success");
+      } else {
+        await DataService.createCategory(form);
+        onShowToast("Yangi bo'lim yaratildi!", "success");
+      }
+      setIsModalOpen(false);
+      loadData();
+    } catch (err) {
+      onShowToast(err.message || "Saqlashda xatolik", "error");
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm("Rostdan ham ushbu kategoriyani o'chirmoqchimisiz?")) {
-      DataService.deleteCategory(id);
-      loadData();
-      onShowToast("Bo'lim o'chirildi.", "warning");
+      try {
+        await DataService.deleteCategory(id);
+        onShowToast("Bo'lim o'chirildi.", "info");
+        loadData();
+      } catch (err) {
+        onShowToast(err.message || "O'chirishda xatolik", "error");
+      }
     }
   };
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontSize: '1.35rem', color: '#fff', fontWeight: '800' }}>Tibbiy Bo'limlar (Kategoriyalar)</h2>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Kardiologiya, Terapiya, Nevrologiya va boshqa mutaxassisliklar katalogi
+          <h2 style={{ fontSize: '1.25rem', color: '#fff', fontWeight: '700' }}>Tibbiy Bo'limlar</h2>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            GET /web/category
           </div>
         </div>
         <button onClick={openCreate} className="btn-primary">
           <Icon name="plus" size={16} />
-          <span>Yangi Bo'lim Qo'shish</span>
+          <span>+ Yangi Bo'lim</span>
         </button>
       </div>
 
       <div className="data-table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Tartib</th>
-              <th>Belgi</th>
-              <th>Bo'lim Nomi (UZ / RU / EN)</th>
-              <th>Auditoriya</th>
-              <th>Yaratilgan Sana</th>
-              <th style={{ textAlign: 'right' }}>Amallar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.map(c => (
-              <tr key={c.id}>
-                <td style={{ width: '60px', fontWeight: '700', color: 'var(--accent-cyan)' }}>
-                  #{c.order_num}
-                </td>
-                <td style={{ width: '60px' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(6, 182, 212, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name={c.icon_url || 'folders'} size={18} color="var(--accent-cyan)" />
-                  </div>
-                </td>
-                <td>
-                  <div style={{ fontWeight: '600', color: '#fff' }}>{c.name?.[lang] || c.name?.uz}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    RU: {c.name?.ru || '—'} | EN: {c.name?.en || '—'}
-                  </div>
-                </td>
-                <td>
-                  <span className={`badge ${c.audience === 'all' ? 'badge-cyan' : c.audience === 'doctor' ? 'badge-emerald' : 'badge-purple'}`}>
-                    {c.audience === 'all' ? 'Barchaga ochiq' : c.audience === 'doctor' ? 'Faqat Shifokorlar' : 'Talabalar'}
-                  </span>
-                </td>
-                <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  {new Date(c.created_at).toLocaleDateString()}
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'inline-flex', gap: '6px' }}>
-                    <button onClick={() => openEdit(c)} className="btn-icon" title="Tahrirlash">
-                      <Icon name="edit" size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(c.id)} className="btn-icon" style={{ color: 'var(--accent-rose)' }} title="O'chirish">
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </div>
-                </td>
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Yuklanmoqda...
+          </div>
+        ) : categories.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Hozircha bo'limlar mavjud emas.
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Tartib</th>
+                <th>Nomi</th>
+                <th>Auditoriya</th>
+                <th>Yaratilgan Sana</th>
+                <th style={{ textAlign: 'right' }}>Amallar</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {categories.map(c => (
+                <tr key={c.id}>
+                  <td style={{ width: '60px', fontWeight: '700', color: 'var(--accent-cyan)' }}>
+                    #{c.order_num}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: '600', color: '#fff' }}>
+                      {typeof c.name === 'string' ? c.name : (c.name?.[lang] || c.name?.uz || '')}
+                    </div>
+                  </td>
+                  <td>
+                    <span className="badge badge-slate">
+                      {c.audience || 'all'}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', gap: '6px' }}>
+                      <button onClick={() => openEdit(c)} className="btn-icon" title="Tahrirlash">
+                        <Icon name="edit" size={15} />
+                      </button>
+                      <button onClick={() => handleDelete(c.id)} className="btn-icon" style={{ color: 'var(--accent-rose)' }} title="O'chirish">
+                        <Icon name="trash" size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Category CRUD Modal */}
+      {/* Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingItem ? "Bo'limni Tahrirlash" : "Yangi Bo'lim Qo'shish"}
-        maxWidth="550px"
+        maxWidth="500px"
       >
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div className="form-group">
-            <label className="form-label">Bo'lim Nomi (O'zbekcha):</label>
+            <label className="form-label">Bo'lim Nomi (UZ):</label>
             <input
               className="form-input"
               required
-              placeholder="Masalan: Kardiologiya"
               value={form.name.uz}
               onChange={(e) => setForm({ ...form, name: { ...form.name, uz: e.target.value } })}
+              placeholder="Masalan: Kardiologiya"
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div className="form-group">
-              <label className="form-label">Bo'lim Nomi (Русский):</label>
+              <label className="form-label">Bo'lim Nomi (RU):</label>
               <input
                 className="form-input"
-                placeholder="Кардиология"
                 value={form.name.ru || ''}
                 onChange={(e) => setForm({ ...form, name: { ...form.name, ru: e.target.value } })}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Bo'lim Nomi (English):</label>
+              <label className="form-label">Bo'lim Nomi (EN):</label>
               <input
                 className="form-input"
-                placeholder="Cardiology"
                 value={form.name.en || ''}
                 onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.target.value } })}
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label className="form-label">Belgi (Icon):</label>
-              <select
-                className="form-select"
-                value={form.icon_url}
-                onChange={(e) => setForm({ ...form, icon_url: e.target.value })}
-              >
-                <option value="heartPulse">Yurak (Cardio)</option>
-                <option value="brain">Miya (Neuro)</option>
-                <option value="activity">Puls / Faollik</option>
-                <option value="stethoscope">Stetoskop</option>
-                <option value="shield">Xirurgiya / Qalqon</option>
-              </select>
-            </div>
-
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div className="form-group">
               <label className="form-label">Auditoriya:</label>
               <select

@@ -1,53 +1,57 @@
 import React from 'react';
 import { Icon } from './Icons';
+import { ApiConfig } from '../lib/api';
 
 export const Sidebar = ({ activeTab, setActiveTab, lang, setLang }) => {
+  const currentUser = ApiConfig.getCurrentUser();
+  const token = ApiConfig.getToken();
+
   const menuSections = [
     {
-      title: "ASOSIY BOSHQARUV",
+      title: "ASOSIY",
       items: [
-        { id: "dashboard", label: "Dashboard / Analitika", icon: "dashboard", badge: "Live" }
+        { id: "dashboard", label: "Dashboard", icon: "dashboard" }
       ]
     },
     {
-      title: "TIBBIY BAZA & SIMULYATSIYA",
+      title: "TIBBIY BAZA",
       items: [
-        { id: "cases", label: "Klinik Case'lar (Simulyatsiya)", icon: "stethoscope", highlight: true },
-        { id: "categories", label: "Bo'limlar (Kategoriya)", icon: "folders" },
-        { id: "topics", label: "Mavzular (Topics)", icon: "listChecks" },
-        { id: "ai_prompts", label: "AI Promptlar & Sandbox", icon: "sparkles", badge: "AI" },
-        { id: "levels", label: "Levellar & XP (Reyting)", icon: "award" }
+        { id: "cases", label: "Klinik Case'lar", icon: "stethoscope" },
+        { id: "categories", label: "Bo'limlar", icon: "folders" },
+        { id: "topics", label: "Mavzular", icon: "listChecks" },
+        { id: "ai_prompts", label: "AI Promptlari", icon: "sparkles" },
+        { id: "levels", label: "Levellar (XP)", icon: "award" }
       ]
     },
     {
-      title: "MOLIYA VA MONETIZATSIYA",
+      title: "MOLIYA",
       items: [
-        { id: "tariffs", label: "Tariflar & Coin Paketlar", icon: "creditCard" },
+        { id: "tariffs", label: "Tariflar", icon: "creditCard" },
         { id: "orders", label: "Buyurtmalar & To'lovlar", icon: "shoppingBag" },
         { id: "promocodes", label: "Promokodlar", icon: "tag" },
-        { id: "partners", label: "Hamkorlar & Universitetlar", icon: "handshake" }
+        { id: "partners", label: "Hamkorlar", icon: "handshake" }
       ]
     },
     {
-      title: "KONTENT VA CMS",
+      title: "KONTENT & CMS",
       items: [
-        { id: "banners", label: "Bannerlar & Slaydlar", icon: "image" },
-        { id: "notifications", label: "Push Bildirishnomalar", icon: "bell" },
-        { id: "cms", label: "CMS & Ilova Havolalari", icon: "fileText" }
+        { id: "banners", label: "Bannerlar", icon: "image" },
+        { id: "notifications", label: "Bildirishnomalar", icon: "bell" },
+        { id: "cms", label: "CMS Kontent", icon: "fileText" }
       ]
     },
     {
-      title: "TIZIM & XAVFSIZLIK",
+      title: "TIZIM",
       items: [
-        { id: "admins", label: "Adminlar & Rollar (RBAC)", icon: "users" },
-        { id: "settings", label: "Tizim Sozlamalari", icon: "settings" }
+        { id: "admins", label: "Adminlar & Rollar", icon: "users" },
+        { id: "settings", label: "Sozlamalar", icon: "settings" }
       ]
     }
   ];
 
   return (
     <aside style={{
-      width: '280px',
+      width: '260px',
       background: 'var(--bg-sidebar)',
       borderRight: '1px solid var(--border-subtle)',
       display: 'flex',
@@ -59,30 +63,25 @@ export const Sidebar = ({ activeTab, setActiveTab, lang, setLang }) => {
     }}>
       {/* Brand Header */}
       <div style={{
-        padding: '20px 22px',
+        padding: '18px 20px',
         borderBottom: '1px solid var(--border-subtle)',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px'
+        gap: '10px'
       }}>
         <div style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '10px',
+          width: '36px',
+          height: '36px',
+          borderRadius: '8px',
           background: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 0 16px rgba(6, 182, 212, 0.4)'
+          justifyContent: 'center'
         }}>
-          <Icon name="stethoscope" size={22} color="#ffffff" />
+          <Icon name="stethoscope" size={20} color="#ffffff" />
         </div>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '1.1rem', fontWeight: '800', letterSpacing: '-0.03em', color: '#fff' }}>TibCase</span>
-            <span className="badge badge-cyan" style={{ padding: '1px 6px', fontSize: '0.65rem' }}>ADMIN</span>
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TibSphere AI Engine</span>
+          <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#fff' }}>TibCase Admin</div>
         </div>
       </div>
 
@@ -90,15 +89,15 @@ export const Sidebar = ({ activeTab, setActiveTab, lang, setLang }) => {
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        padding: '16px 12px'
+        padding: '14px 10px'
       }}>
         {menuSections.map((sec, idx) => (
-          <div key={idx} style={{ marginBottom: '20px' }}>
+          <div key={idx} style={{ marginBottom: '16px' }}>
             <div style={{
-              fontSize: '0.68rem',
+              fontSize: '0.65rem',
               fontWeight: '700',
               color: 'var(--text-muted)',
-              padding: '0 12px 8px 12px',
+              padding: '0 10px 6px 10px',
               letterSpacing: '0.08em'
             }}>
               {sec.title}
@@ -113,41 +112,23 @@ export const Sidebar = ({ activeTab, setActiveTab, lang, setLang }) => {
                     width: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    marginBottom: '3px',
-                    transition: 'all 0.18s ease',
-                    background: isActive ? 'linear-gradient(90deg, rgba(6, 182, 212, 0.18) 0%, rgba(59, 130, 246, 0.1) 100%)' : 'transparent',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    marginBottom: '2px',
+                    transition: 'all 0.15s ease',
+                    background: isActive ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
                     borderLeft: isActive ? '3px solid var(--accent-cyan)' : '3px solid transparent',
                     color: isActive ? '#fff' : 'var(--text-secondary)'
                   }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
-                      e.currentTarget.style.color = '#fff';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = 'var(--text-secondary)';
-                    }
-                  }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Icon
                       name={item.icon}
-                      size={17}
+                      size={16}
                       color={isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'}
                     />
-                    <span style={{ fontSize: '0.84rem', fontWeight: isActive ? '600' : '500' }}>{item.label}</span>
+                    <span style={{ fontSize: '0.82rem', fontWeight: isActive ? '600' : '500' }}>{item.label}</span>
                   </div>
-                  {item.badge && (
-                    <span className={`badge ${item.badge === 'AI' ? 'badge-purple' : 'badge-emerald'}`} style={{ padding: '2px 6px', fontSize: '0.65rem' }}>
-                      {item.badge}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -157,25 +138,25 @@ export const Sidebar = ({ activeTab, setActiveTab, lang, setLang }) => {
 
       {/* Language & Profile Footer */}
       <div style={{
-        padding: '14px 16px',
+        padding: '12px 14px',
         borderTop: '1px solid var(--border-subtle)',
-        background: '#0a1020',
+        background: '#090e1a',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px'
+        gap: '8px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Til / Язык:</span>
-          <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-input)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Til:</span>
+          <div style={{ display: 'flex', gap: '3px', background: 'var(--bg-input)', padding: '2px', borderRadius: '4px' }}>
             {['uz', 'ru', 'en'].map(l => (
               <button
                 key={l}
                 onClick={() => setLang(l)}
                 style={{
-                  padding: '2px 7px',
-                  fontSize: '0.7rem',
+                  padding: '2px 6px',
+                  fontSize: '0.68rem',
                   fontWeight: '600',
-                  borderRadius: '4px',
+                  borderRadius: '3px',
                   textTransform: 'uppercase',
                   background: lang === l ? 'var(--accent-cyan)' : 'transparent',
                   color: lang === l ? '#fff' : 'var(--text-secondary)'
@@ -187,26 +168,24 @@ export const Sidebar = ({ activeTab, setActiveTab, lang, setLang }) => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '4px' }}>
           <div style={{
-            width: '32px',
-            height: '32px',
+            width: '28px',
+            height: '28px',
             borderRadius: '50%',
             background: 'rgba(59, 130, 246, 0.2)',
-            border: '1px solid var(--accent-blue)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Icon name="shield" size={15} color="var(--accent-blue)" />
+            <Icon name="shield" size={14} color="var(--accent-blue)" />
           </div>
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: '600', color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-              Super Admin
+            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+              {token ? (currentUser?.login || 'Admin') : 'Mehmon'}
             </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }}></span>
-              Online / Active
+            <div style={{ fontSize: '0.65rem', color: token ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
+              {token ? '● Ulangan' : '○ Ulanmagan'}
             </div>
           </div>
         </div>
