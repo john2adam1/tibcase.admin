@@ -773,6 +773,7 @@ const MODULE_CONFIGS = {
   level: {
     label: "Levellar",
     base: '/web/level',
+    noPagination: true,
     columns: ['id', 'level_number', 'slug', 'required_xp', 'title'],
     search: [],
     fields: [
@@ -821,6 +822,8 @@ function GenericPanel({ moduleKey, api, addToast }) {
   const [modalTitle, setModalTitle] = useState('');
   const [editItem, setEditItem] = useState(null);
   const [formValues, setFormValues] = useState({});
+  const [refreshedPw, setRefreshedPw] = useState(null);
+  const [viewDetailsItem, setViewDetailsItem] = useState(null);
 
   useEffect(() => {
     // Preload async options for this module
@@ -885,14 +888,38 @@ function GenericPanel({ moduleKey, api, addToast }) {
     }
   };
 
+  const handleRefreshPassword = async (row) => {
+    if (!window.confirm(`${row.login || row.id} uchun yangi parol generatsiya qilinsinmi?`)) return;
+    try {
+      const res = await api('/web/auth/password/refresh', {
+        method: 'PUT',
+        body: { role: 'admin', user_id: row.id }
+      });
+      setRefreshedPw({ target: row.login || row.id, password: res.password });
+    } catch {}
+  };
+
+  const handleViewDetails = async (row) => {
+    try {
+      const res = await api(`${cfg.base}/${row.id}`);
+      setViewDetailsItem({ title: `${cfg.label}: ${row.id}`, data: res });
+    } catch {
+      setViewDetailsItem({ title: `${cfg.label}: ${row.id}`, data: row });
+    }
+  };
+
   const handleModalSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = { ...formValues };
+      if (cfg.base === '/web/admin' && editItem?.id && !payload.password) {
+        delete payload.password;
+      }
       if (editItem?.id) {
-        await api(`${cfg.base}/${editItem.id}/update`, { method: 'PUT', body: formValues });
+        await api(`${cfg.base}/${editItem.id}/update`, { method: 'PUT', body: payload });
         addToast("Saqlandi", "ok");
       } else {
-        await api(cfg.base, { method: 'POST', body: formValues });
+        await api(cfg.base, { method: 'POST', body: payload });
         addToast("Yaratildi", "ok");
       }
       if (cfg.onSaved) cfg.onSaved();
@@ -970,6 +997,12 @@ function GenericPanel({ moduleKey, api, addToast }) {
                 ))}
                 <td>
                   <div className="actions">
+                    {moduleKey === 'promocode' && (
+                      <button className="sm" onClick={() => handleViewDetails(row)}>👁 Ko'rish</button>
+                    )}
+                    {moduleKey === 'admin' && (
+                      <button className="sm" title="Yangi parol generatsiya qilish" onClick={() => handleRefreshPassword(row)}>🔑 Parol</button>
+                    )}
                     {cfg.canUpdate !== false && (
                       <button className="sm" onClick={() => handleOpenEdit(row)}>✏️ Tahrir</button>
                     )}
@@ -1102,6 +1135,62 @@ function GenericPanel({ moduleKey, api, addToast }) {
           </div>
         </div>
       )}
+
+      {/* View Details Modal */}
+      {viewDetailsItem && (
+        <div className="modalOverlay" onClick={() => setViewDetailsItem(null)}>
+          <div className="modal">
+            <h3>{viewDetailsItem.title}</h3>
+            <textarea
+              readOnly
+              rows={14}
+              value={JSON.stringify(viewDetailsItem.data, null, 2)}
+              style={{ fontFamily: 'monospace', fontSize: '12px', width: '100%' }}
+            />
+            <div className="modalFooter">
+              <button className="primary" onClick={() => setViewDetailsItem(null)}>Yopish</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refreshed Password Modal */}
+      {refreshedPw && (
+        <div className="modalOverlay" onClick={() => setRefreshedPw(null)}>
+          <div className="modal" style={{ maxWidth: '440px' }}>
+            <h3>🔑 Yangi parol yaratildi</h3>
+            <p className="muted" style={{ marginBottom: '12px' }}>{refreshedPw.target} uchun yangi vaqtinchalik parol:</p>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#0e1726',
+              border: '1px solid #334155',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              fontFamily: 'monospace',
+              fontSize: '15px',
+              color: '#38bdf8',
+              marginBottom: '16px'
+            }}>
+              <span>{refreshedPw.password}</span>
+              <button
+                type="button"
+                className="sm primary"
+                onClick={() => {
+                  navigator.clipboard?.writeText(refreshedPw.password);
+                  addToast("Parol nusxalandi", "ok");
+                }}
+              >
+                📋 Nusxalash
+              </button>
+            </div>
+            <div className="modalFooter">
+              <button className="primary" onClick={() => setRefreshedPw(null)}>Tushunarli</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1115,7 +1204,15 @@ function CasePanel({ api, addToast }) {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [filters, setFilters] = useState({ search: '', topic_id: '', category_id: '', difficulty: '', status: '' });
+  const [filters, setFilters] = useState({
+    search: '',
+    topic_id: '',
+    category_id: '',
+    difficulty: '',
+    status: '',
+    patient_gender: '',
+    is_ai_generated: ''
+  });
 
   // Topic and category options
   const [topics, setTopics] = useState([]);
@@ -1149,7 +1246,8 @@ function CasePanel({ api, addToast }) {
     visual_state: '',
     initial_vitals: { hr: 80, bp: '120/80', spo2: 98, rr: 16, temp: 36.6, gcs: 15 },
     scenario: '{}',
-    order_num: 1
+    order_num: 1,
+    is_ai_generated: false
   });
 
   const loadRefs = async () => {
@@ -1290,7 +1388,8 @@ function CasePanel({ api, addToast }) {
       visual_state: '',
       initial_vitals: { hr: 80, bp: '120/80', spo2: 98, rr: 16, temp: 36.6, gcs: 15 },
       scenario: '{}',
-      order_num: 1
+      order_num: 1,
+      is_ai_generated: false
     });
     setIsCaseModalOpen(true);
   };
@@ -1313,9 +1412,17 @@ function CasePanel({ api, addToast }) {
       patient_gender: full.patient_gender || 'male',
       expected_duration_minutes: full.expected_duration_minutes ?? 15,
       visual_state: full.visual_state || '',
-      initial_vitals: full.initial_vitals || { hr: 80, bp: '120/80', spo2: 98, rr: 16, temp: 36.6, gcs: 15 },
+      initial_vitals: {
+        hr: full.initial_vitals?.hr ?? 80,
+        bp: full.initial_vitals?.bp ?? '120/80',
+        spo2: full.initial_vitals?.spo2 ?? 98,
+        rr: full.initial_vitals?.rr ?? 16,
+        temp: full.initial_vitals?.temp ?? 36.6,
+        gcs: full.initial_vitals?.gcs ?? 15
+      },
       scenario: typeof full.scenario === 'object' ? JSON.stringify(full.scenario, null, 2) : (full.scenario || '{}'),
-      order_num: full.order_num ?? 1
+      order_num: full.order_num ?? 1,
+      is_ai_generated: !!full.is_ai_generated
     });
     setIsCaseModalOpen(true);
   };
@@ -1335,7 +1442,16 @@ function CasePanel({ api, addToast }) {
       scenario: parsedScenario,
       patient_age: Number(caseForm.patient_age) || 0,
       expected_duration_minutes: Number(caseForm.expected_duration_minutes) || 0,
-      order_num: Number(caseForm.order_num) || 0
+      order_num: Number(caseForm.order_num) || 0,
+      is_ai_generated: !!caseForm.is_ai_generated,
+      initial_vitals: {
+        hr: Number(caseForm.initial_vitals?.hr) || 80,
+        bp: String(caseForm.initial_vitals?.bp || '120/80'),
+        spo2: Number(caseForm.initial_vitals?.spo2) || 98,
+        rr: Number(caseForm.initial_vitals?.rr) || 16,
+        temp: Number(caseForm.initial_vitals?.temp) || 36.6,
+        gcs: Number(caseForm.initial_vitals?.gcs) || 15
+      }
     };
 
     try {
@@ -1403,6 +1519,28 @@ function CasePanel({ api, addToast }) {
           </select>
         </div>
         <div className="field">
+          <label>Jinsi</label>
+          <select
+            value={filters.patient_gender}
+            onChange={(e) => setFilters({ ...filters, patient_gender: e.target.value })}
+          >
+            <option value="">— barchasi —</option>
+            <option value="male">Erkak</option>
+            <option value="female">Ayol</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>AI Case</label>
+          <select
+            value={filters.is_ai_generated}
+            onChange={(e) => setFilters({ ...filters, is_ai_generated: e.target.value })}
+          >
+            <option value="">— barchasi —</option>
+            <option value="true">Faqat AI</option>
+            <option value="false">Qo'lda yaratilgan</option>
+          </select>
+        </div>
+        <div className="field">
           <label>Qidiruv</label>
           <input
             type="text"
@@ -1428,7 +1566,8 @@ function CasePanel({ api, addToast }) {
               <th>Sarlavha</th>
               <th>Qiyinlik</th>
               <th>Status</th>
-              <th>Yoshi</th>
+              <th>Jinsi / Yoshi</th>
+              <th>Turi</th>
               <th>Yaratildi</th>
               <th>Amallar</th>
             </tr>
@@ -1444,7 +1583,8 @@ function CasePanel({ api, addToast }) {
                     {c.status}
                   </span>
                 </td>
-                <td>{c.patient_age ?? '—'}</td>
+                <td>{c.patient_gender === 'female' ? '👩 Ayol' : '👨 Erkak'}, {c.patient_age ?? '—'} yosh</td>
+                <td>{c.is_ai_generated ? <span className="pill ok">🤖 AI</span> : <span className="pill">Qo'lda</span>}</td>
                 <td>{fmtCell(c.created_at)}</td>
                 <td>
                   <div className="actions">
@@ -1715,7 +1855,7 @@ function CasePanel({ api, addToast }) {
                   />
                 </div>
                 <div className="field">
-                  <label>Vitals: RR</label>
+                  <label>Vitals: RR (nafas)</label>
                   <input
                     type="number"
                     value={caseForm.initial_vitals?.rr || 16}
@@ -1724,6 +1864,52 @@ function CasePanel({ api, addToast }) {
                       initial_vitals: { ...caseForm.initial_vitals, rr: Number(e.target.value) }
                     })}
                   />
+                </div>
+                <div className="field">
+                  <label>Vitals: Harorat (°C)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={caseForm.initial_vitals?.temp || 36.6}
+                    onChange={(e) => setCaseForm({
+                      ...caseForm,
+                      initial_vitals: { ...caseForm.initial_vitals, temp: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Vitals: GCS (Glazgo 3-15)</label>
+                  <input
+                    type="number"
+                    min="3"
+                    max="15"
+                    value={caseForm.initial_vitals?.gcs || 15}
+                    onChange={(e) => setCaseForm({
+                      ...caseForm,
+                      initial_vitals: { ...caseForm.initial_vitals, gcs: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+
+                <div className="field full">
+                  <label>Tashqi ko'rinish / Holat (visual_state)</label>
+                  <input
+                    type="text"
+                    value={caseForm.visual_state || ''}
+                    placeholder="Masalan: Rangi oqargan, sovuq ter bosgan, tormozlangan"
+                    onChange={(e) => setCaseForm({ ...caseForm, visual_state: e.target.value })}
+                  />
+                </div>
+
+                <div className="field full">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!caseForm.is_ai_generated}
+                      onChange={(e) => setCaseForm({ ...caseForm, is_ai_generated: e.target.checked })}
+                    />
+                    <span>🤖 AI yordamida generatsiya qilingan case</span>
+                  </label>
                 </div>
 
                 <div className="field full">
@@ -1759,6 +1945,7 @@ function UserPanel({ api, addToast }) {
   const [limit, setLimit] = useState(10);
   const [filters, setFilters] = useState({ name: '', email: '', phone_number: '' });
   const [selectedUser, setSelectedUser] = useState(null);
+  const [refreshedPw, setRefreshedPw] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -1785,6 +1972,17 @@ function UserPanel({ api, addToast }) {
       await api(`/web/user/${u.id}/delete`, { method: 'DELETE' });
       addToast("O'chirildi", "ok");
       load();
+    } catch {}
+  };
+
+  const handleRefreshUserPassword = async (u) => {
+    if (!window.confirm(`${u.name || u.phone_number || u.id} uchun yangi parol generatsiya qilinsinmi?`)) return;
+    try {
+      const res = await api('/web/auth/password/refresh', {
+        method: 'PUT',
+        body: { role: 'user', user_id: u.id }
+      });
+      setRefreshedPw({ target: u.name || u.phone_number || u.id, password: res.password });
     } catch {}
   };
 
@@ -1861,6 +2059,7 @@ function UserPanel({ api, addToast }) {
                         setSelectedUser(full);
                       } catch {}
                     }}>👁 Ko'rish</button>
+                    <button className="sm" title="Yangi parol generatsiya qilish" onClick={() => handleRefreshUserPassword(u)}>🔑 Parol</button>
                     <button className="sm danger" onClick={() => handleDelete(u)}>🗑 O'chirish</button>
                   </div>
                 </td>
@@ -1878,16 +2077,95 @@ function UserPanel({ api, addToast }) {
 
       {selectedUser && (
         <div className="modalOverlay" onClick={() => setSelectedUser(null)}>
-          <div className="modal">
-            <h3>Foydalanuvchi ma'lumotlari: {selectedUser.id}</h3>
-            <textarea
-              readOnly
-              rows={14}
-              value={JSON.stringify(selectedUser, null, 2)}
-              style={{ fontFamily: 'monospace', fontSize: '12px' }}
-            />
+          <div className="modal" style={{ maxWidth: '560px' }}>
+            <h3>Foydalanuvchi ma'lumotlari: {selectedUser.name || selectedUser.id}</h3>
+            
+            <div className="cards" style={{ marginBottom: '16px' }}>
+              <div className="card">
+                <div className="v">{selectedUser.level ?? 1}</div>
+                <div className="l">Level</div>
+              </div>
+              <div className="card">
+                <div className="v">{selectedUser.xp ?? 0}</div>
+                <div className="l">XP</div>
+              </div>
+              <div className="card">
+                <div className="v">🪙 {selectedUser.coins ?? 0}</div>
+                <div className="l">Tangalar</div>
+              </div>
+              <div className="card">
+                <div className="v">🔥 {selectedUser.streak_count ?? 0}</div>
+                <div className="l">Streak</div>
+              </div>
+            </div>
+
+            <div className="kv card" style={{ marginBottom: '14px' }}>
+              <div><span className="k">ID:</span>{selectedUser.id}</div>
+              <div><span className="k">Ism:</span>{selectedUser.name || '—'}</div>
+              <div><span className="k">Telefon:</span>{selectedUser.phone_number || '—'}</div>
+              <div><span className="k">Email:</span>{selectedUser.email || '—'}</div>
+              <div><span className="k">Mutaxassislik:</span>{selectedUser.specialization || '—'}</div>
+              <div><span className="k">Ilova tili:</span>{selectedUser.language || 'uz'}</div>
+              <div><span className="k">Ro'yxatdan o'tgan:</span>{selectedUser.created_at || '—'}</div>
+            </div>
+
+            <details style={{ marginBottom: '14px', cursor: 'pointer' }}>
+              <summary style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Raw JSON ko'rish</summary>
+              <textarea
+                readOnly
+                rows={8}
+                value={JSON.stringify(selectedUser, null, 2)}
+                style={{ fontFamily: 'monospace', fontSize: '11px', marginTop: '6px', width: '100%' }}
+              />
+            </details>
+
             <div className="modalFooter">
+              <button
+                type="button"
+                className="sm"
+                onClick={() => handleRefreshUserPassword(selectedUser)}
+              >
+                🔑 Yangi parol yaratish
+              </button>
               <button className="primary" onClick={() => setSelectedUser(null)}>Yopish</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refreshed Password Modal */}
+      {refreshedPw && (
+        <div className="modalOverlay" onClick={() => setRefreshedPw(null)}>
+          <div className="modal" style={{ maxWidth: '440px' }}>
+            <h3>🔑 Yangi parol yaratildi</h3>
+            <p className="muted" style={{ marginBottom: '12px' }}>{refreshedPw.target} uchun yangi vaqtinchalik parol:</p>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#0e1726',
+              border: '1px solid #334155',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              fontFamily: 'monospace',
+              fontSize: '15px',
+              color: '#38bdf8',
+              marginBottom: '16px'
+            }}>
+              <span>{refreshedPw.password}</span>
+              <button
+                type="button"
+                className="sm primary"
+                onClick={() => {
+                  navigator.clipboard?.writeText(refreshedPw.password);
+                  addToast("Parol nusxalandi", "ok");
+                }}
+              >
+                📋 Nusxalash
+              </button>
+            </div>
+            <div className="modalFooter">
+              <button className="primary" onClick={() => setRefreshedPw(null)}>Tushunarli</button>
             </div>
           </div>
         </div>
@@ -1907,11 +2185,36 @@ function OrderPanel({ api }) {
   const [limit, setLimit] = useState(10);
   const [status, setStatus] = useState('');
   const [userId, setUserId] = useState('');
+  const [tariffId, setTariffId] = useState('');
+  const [paymentType, setPaymentType] = useState('');
+  const [timeType, setTimeType] = useState('');
+  const [day, setDay] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [tariffs, setTariffs] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+
+  useEffect(() => {
+    loadRefOptions('tariff', api).then(setTariffs);
+  }, []);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api('/web/order', { query: { status, user_id: userId, limit, page } });
+      const res = await api('/web/order', {
+        query: {
+          status,
+          user_id: userId,
+          tariff_id: tariffId,
+          payment_type: paymentType,
+          type: timeType,
+          day,
+          from,
+          to,
+          limit,
+          page
+        }
+      });
       const extracted = extractList(res);
       setOrders(extracted.items);
       setCount(extracted.count);
@@ -1931,10 +2234,10 @@ function OrderPanel({ api }) {
 
   return (
     <div>
-      <h2 className="pageTitle">Buyurtmalar (Obunalar)</h2>
-      <p className="pageDesc">/web/order — faqat ko'rish</p>
+      <h2 className="pageTitle">Buyurtmalar (Obunalar & To'lovlar)</h2>
+      <p className="pageDesc">/web/order — barcha buyurtmalar monitoringi va tafsilotlari</p>
 
-      <div className="toolbar">
+      <div className="toolbar" style={{ flexWrap: 'wrap', gap: '8px' }}>
         <div className="field">
           <label>Status</label>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -1947,8 +2250,44 @@ function OrderPanel({ api }) {
           </select>
         </div>
         <div className="field">
+          <label>Tarif</label>
+          <select value={tariffId} onChange={(e) => setTariffId(e.target.value)}>
+            <option value="">— barcha tariflar —</option>
+            {tariffs.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>To'lov turi</label>
+          <select value={paymentType} onChange={(e) => setPaymentType(e.target.value)}>
+            <option value="">— barchasi —</option>
+            <option value="PAYME">PAYME</option>
+            <option value="CLICK">CLICK</option>
+            <option value="UZUM">UZUM</option>
+            <option value="COIN">COIN</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Vaqt turi</label>
+          <select value={timeType} onChange={(e) => setTimeType(e.target.value)}>
+            <option value="">— ixtiyoriy —</option>
+            <option value="day">Kun</option>
+            <option value="week">Hafta</option>
+            <option value="month">Oy</option>
+            <option value="year">Yil</option>
+            <option value="range">Oraliq (range)</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Dan (From)</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Gacha (To)</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </div>
+        <div className="field">
           <label>User ID</label>
-          <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="User ID" />
+          <input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="Foydalanuvchi ID" />
         </div>
         <button onClick={() => { setPage(1); load(); }}>🔍 Qidirish</button>
       </div>
@@ -1970,6 +2309,7 @@ function OrderPanel({ api }) {
               <th>Status</th>
               <th>Yaratildi</th>
               <th>To'landi</th>
+              <th>Amallar</th>
             </tr>
           </thead>
           <tbody>
@@ -1988,6 +2328,18 @@ function OrderPanel({ api }) {
                 <td><span className="pill">{fmtCell(o.status)}</span></td>
                 <td>{fmtCell(o.created_at)}</td>
                 <td>{fmtCell(o.paid_at)}</td>
+                <td>
+                  <div className="actions">
+                    <button className="sm" onClick={async () => {
+                      try {
+                        const full = await api(`/web/order/${o.id}`);
+                        setSelectedOrder(full);
+                      } catch {
+                        setSelectedOrder(o);
+                      }
+                    }}>👁 Ko'rish</button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1999,6 +2351,40 @@ function OrderPanel({ api }) {
         <span>Sahifa {page} / {totalPages} — jami: {count}</span>
         <button className="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Keyingi →</button>
       </div>
+
+      {selectedOrder && (
+        <div className="modalOverlay" onClick={() => setSelectedOrder(null)}>
+          <div className="modal" style={{ maxWidth: '560px' }}>
+            <h3>Buyurtma tafsilotlari: {selectedOrder.id}</h3>
+
+            <div className="kv card" style={{ marginBottom: '14px' }}>
+              <div><span className="k">Buyurtma ID:</span>{selectedOrder.id}</div>
+              <div><span className="k">Status:</span><span className="pill">{selectedOrder.status}</span></div>
+              <div><span className="k">Foydalanuvchi:</span>{selectedOrder.user_name || '—'} ({selectedOrder.user_phone || selectedOrder.user_id})</div>
+              <div><span className="k">Tarif:</span>{selectedOrder.tariff_name || '—'}</div>
+              <div><span className="k">Summa:</span>{selectedOrder.amount ? `${selectedOrder.amount.toLocaleString()} so'm` : '0 so\'m'}</div>
+              <div><span className="k">Ishlatilgan tangalar:</span>🪙 {selectedOrder.coins_used ?? 0}</div>
+              <div><span className="k">To'lov usuli:</span>{selectedOrder.payment_type || '—'}</div>
+              <div><span className="k">Yaratilgan vaqti:</span>{selectedOrder.created_at || '—'}</div>
+              <div><span className="k">To'langan vaqti:</span>{selectedOrder.paid_at || '—'}</div>
+            </div>
+
+            <details style={{ marginBottom: '14px', cursor: 'pointer' }}>
+              <summary style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Raw JSON ko'rish</summary>
+              <textarea
+                readOnly
+                rows={8}
+                value={JSON.stringify(selectedOrder, null, 2)}
+                style={{ fontFamily: 'monospace', fontSize: '11px', marginTop: '6px', width: '100%' }}
+              />
+            </details>
+
+            <div className="modalFooter">
+              <button className="primary" onClick={() => setSelectedOrder(null)}>Yopish</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2015,6 +2401,8 @@ function CoinMonitoringPanel({ api }) {
   const [limit, setLimit] = useState(20);
   const [reason, setReason] = useState('');
   const [userId, setUserId] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   const loadSummary = async () => {
     try {
@@ -2026,7 +2414,16 @@ function CoinMonitoringPanel({ api }) {
   const loadList = async () => {
     setLoading(true);
     try {
-      const res = await api('/web/coin-transaction', { query: { reason, user_id: userId, limit, page } });
+      const res = await api('/web/coin-transaction', {
+        query: {
+          reason,
+          user_id: userId,
+          from,
+          to,
+          limit,
+          page
+        }
+      });
       const extracted = extractList(res);
       setTransactions(extracted.items);
       setCount(extracted.count);
@@ -2069,7 +2466,7 @@ function CoinMonitoringPanel({ api }) {
         ))}
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar" style={{ flexWrap: 'wrap', gap: '8px' }}>
         <div className="field">
           <label>Sabab</label>
           <select value={reason} onChange={(e) => setReason(e.target.value)}>
@@ -2080,6 +2477,14 @@ function CoinMonitoringPanel({ api }) {
             <option value="promo_redeem">Promokod</option>
             <option value="simulation_finish">Simulyatsiya</option>
           </select>
+        </div>
+        <div className="field">
+          <label>Dan (From)</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Gacha (To)</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         <div className="field">
           <label>User ID</label>
