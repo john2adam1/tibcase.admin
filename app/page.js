@@ -774,12 +774,14 @@ const MODULE_CONFIGS = {
     label: "Levellar",
     base: '/web/level',
     noPagination: true,
-    columns: ['id', 'level_number', 'slug', 'required_xp', 'title'],
+    columns: ['id', 'level_number', 'slug', 'required_xp', 'xp_reward', 'coin_reward', 'title'],
     search: [],
     fields: [
       { name: 'level_number', label: 'Level raqami', type: 'number', required: true },
       { name: 'slug', label: 'Slug (o\'zgarmas kod)', type: 'text', required: true },
       { name: 'required_xp', label: 'Kerakli XP', type: 'number' },
+      { name: 'xp_reward', label: 'Bazaviy XP mukofoti (shu level uchun)', type: 'number' },
+      { name: 'coin_reward', label: 'Bazaviy coin mukofoti (shu level uchun)', type: 'number' },
       { name: 'title', label: 'Sarlavha', type: 'text' },
       { name: 'badge_image_url', label: 'Belgi rasmi (URL)', type: 'file' }
     ]
@@ -915,6 +917,10 @@ function GenericPanel({ moduleKey, api, addToast }) {
       if (cfg.base === '/web/admin' && editItem?.id && !payload.password) {
         delete payload.password;
       }
+      // Bo'sh raqam maydonlarini yubormaymiz (backend integer kutadi)
+      (activeFields || []).forEach(f => {
+        if (f.type === 'number' && payload[f.name] === '') delete payload[f.name];
+      });
       if (editItem?.id) {
         await api(`${cfg.base}/${editItem.id}/update`, { method: 'PUT', body: payload });
         addToast("Saqlandi", "ok");
@@ -3024,6 +3030,9 @@ function SettingsPanel({ api, addToast }) {
   const [formKey, setFormKey] = useState('');
   const [formVal, setFormVal] = useState('');
 
+  const [diff, setDiff] = useState({ medium_multiplier: 1.5, hard_multiplier: 2 });
+  const [savingDiff, setSavingDiff] = useState(false);
+
   const load = async () => {
     try {
       const res = await api('/web/setting');
@@ -3033,9 +3042,43 @@ function SettingsPanel({ api, addToast }) {
     }
   };
 
+  const loadDiff = async () => {
+    try {
+      const res = await api('/web/setting/difficulty-reward');
+      if (res && typeof res === 'object') {
+        setDiff({
+          medium_multiplier: res.medium_multiplier ?? 1.5,
+          hard_multiplier: res.hard_multiplier ?? 2
+        });
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     load();
+    loadDiff();
   }, []);
+
+  const handleSaveDiff = async (e) => {
+    e.preventDefault();
+    const medium = Number(diff.medium_multiplier);
+    const hard = Number(diff.hard_multiplier);
+    if (!(medium > 0) || !(hard > 0)) {
+      addToast("Koeffitsientlar 0 dan katta bo'lishi kerak", "err");
+      return;
+    }
+    setSavingDiff(true);
+    try {
+      await api('/web/setting/difficulty-reward', {
+        method: 'PUT',
+        body: { medium_multiplier: medium, hard_multiplier: hard }
+      });
+      addToast("Qiyinlik koeffitsientlari saqlandi", "ok");
+      loadDiff();
+    } catch {} finally {
+      setSavingDiff(false);
+    }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -3051,6 +3094,44 @@ function SettingsPanel({ api, addToast }) {
     <div>
       <h2 className="pageTitle">Tizim sozlamalari</h2>
       <p className="pageDesc">/web/setting — key/value (value JSON string sifatida)</p>
+
+      <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
+        <h3 style={{ marginTop: 0 }}>Qiyinlik koeffitsienti (XP / coin)</h3>
+        <p className="muted" style={{ marginBottom: '10px' }}>
+          /web/setting/difficulty-reward — mukofot = level bazasi × koeffitsient × (ball / 100). Easy = 1x (o'zgarmaydi).
+        </p>
+        <form onSubmit={handleSaveDiff}>
+          <div className="formGrid">
+            <div className="field">
+              <label>Medium koeffitsienti *</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                required
+                value={diff.medium_multiplier}
+                onChange={(e) => setDiff({ ...diff, medium_multiplier: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>Hard koeffitsienti *</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                required
+                value={diff.hard_multiplier}
+                onChange={(e) => setDiff({ ...diff, hard_multiplier: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="modalFooter">
+            <button type="submit" className="primary" disabled={savingDiff}>
+              {savingDiff ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </div>
+        </form>
+      </div>
 
       <button className="primary" onClick={() => { setFormKey('daily_free_limit'); setFormVal(''); setIsModalOpen(true); }}>
         + Sozlama qo'shish / yangilash

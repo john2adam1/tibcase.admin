@@ -526,6 +526,8 @@ BACKEND_STRUCTURE.md 2-bo'lim: tibbiy yo'nalishlar (Kardiologiya, Terapiya va h.
   - `required_xp`: integer
   - `slug`: string
   - `title`: string
+  - `xp_reward`: integer
+  - `coin_reward`: integer
 
 ### `POST /web/level`
 **Level qo'shish (statik jadval)**
@@ -536,6 +538,8 @@ BACKEND_STRUCTURE.md 2-bo'lim: tibbiy yo'nalishlar (Kardiologiya, Terapiya va h.
   - `required_xp`: integer
   - `slug`: string
   - `title`: string
+  - `xp_reward`: integer
+  - `coin_reward`: integer
 **Javob (200):**
 `string`
 
@@ -557,6 +561,8 @@ BACKEND_STRUCTURE.md 2-bo'lim: tibbiy yo'nalishlar (Kardiologiya, Terapiya va h.
   - `required_xp`: integer
   - `slug`: string
   - `title`: string
+  - `xp_reward`: integer
+  - `coin_reward`: integer
 **Javob (200):**
 `string`
 
@@ -864,6 +870,19 @@ Sotib olingan, ishlab topilgan, sarflangan va aylanmadagi jami tanga
   - `key`: string
   - `updated_at`: string
   - `value`: string
+
+### `GET /web/setting/difficulty-reward`
+**Qiyinlik koeffitsienti (XP/coin)**
+- Auth: kerak (Bearer token)
+**Javob (200):**
+  - `medium_multiplier`: number (default 1.5)
+  - `hard_multiplier`: number (default 2)
+
+### `PUT /web/setting/difficulty-reward`
+- Auth: kerak (Bearer token)
+**Body:**
+  - `medium_multiplier`: number
+  - `hard_multiplier`: number
 
 ### `PUT /web/setting`
 - Auth: kerak (Bearer token)
