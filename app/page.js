@@ -1037,7 +1037,7 @@ function GenericPanel({ moduleKey, api, addToast }) {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="modalOverlay" onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
           <div className="modal">
             <h3>{modalTitle}</h3>
             <form onSubmit={handleModalSubmit}>
@@ -1144,7 +1144,7 @@ function GenericPanel({ moduleKey, api, addToast }) {
 
       {/* View Details Modal */}
       {viewDetailsItem && (
-        <div className="modalOverlay" onClick={() => setViewDetailsItem(null)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setViewDetailsItem(null); }}>
           <div className="modal">
             <h3>{viewDetailsItem.title}</h3>
             <textarea
@@ -1162,7 +1162,7 @@ function GenericPanel({ moduleKey, api, addToast }) {
 
       {/* Refreshed Password Modal */}
       {refreshedPw && (
-        <div className="modalOverlay" onClick={() => setRefreshedPw(null)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setRefreshedPw(null); }}>
           <div className="modal" style={{ maxWidth: '440px' }}>
             <h3>🔑 Yangi parol yaratildi</h3>
             <p className="muted" style={{ marginBottom: '12px' }}>{refreshedPw.target} uchun yangi vaqtinchalik parol:</p>
@@ -1620,7 +1620,7 @@ function CasePanel({ api, addToast }) {
 
       {/* Info modal for AI results */}
       {infoModal && (
-        <div className="modalOverlay" onClick={() => setInfoModal(null)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setInfoModal(null); }}>
           <div className="modal">
             <h3>{infoModal.title}</h3>
             {infoModal.content}
@@ -1633,7 +1633,7 @@ function CasePanel({ api, addToast }) {
 
       {/* AI Gen Modal */}
       {isAiGenOpen && (
-        <div className="modalOverlay" onClick={(e) => { if (e.target === e.currentTarget) setIsAiGenOpen(false); }}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsAiGenOpen(false); }}>
           <div className="modal">
             <h3>AI yordamida case generatsiyasi</h3>
             <form onSubmit={handleAiGenSubmit}>
@@ -1686,7 +1686,7 @@ function CasePanel({ api, addToast }) {
 
       {/* Full Case Modal */}
       {isCaseModalOpen && (
-        <div className="modalOverlay" onClick={(e) => { if (e.target === e.currentTarget) setIsCaseModalOpen(false); }}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsCaseModalOpen(false); }}>
           <div className="modal" style={{ width: '700px' }}>
             <h3>{editingCase ? "Case tahrirlash" : "Yangi Case"}</h3>
             <form onSubmit={handleSaveCase}>
@@ -2082,7 +2082,7 @@ function UserPanel({ api, addToast }) {
       </div>
 
       {selectedUser && (
-        <div className="modalOverlay" onClick={() => setSelectedUser(null)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedUser(null); }}>
           <div className="modal" style={{ maxWidth: '560px' }}>
             <h3>Foydalanuvchi ma'lumotlari: {selectedUser.name || selectedUser.id}</h3>
             
@@ -2141,7 +2141,7 @@ function UserPanel({ api, addToast }) {
 
       {/* Refreshed Password Modal */}
       {refreshedPw && (
-        <div className="modalOverlay" onClick={() => setRefreshedPw(null)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setRefreshedPw(null); }}>
           <div className="modal" style={{ maxWidth: '440px' }}>
             <h3>🔑 Yangi parol yaratildi</h3>
             <p className="muted" style={{ marginBottom: '12px' }}>{refreshedPw.target} uchun yangi vaqtinchalik parol:</p>
@@ -2359,7 +2359,7 @@ function OrderPanel({ api }) {
       </div>
 
       {selectedOrder && (
-        <div className="modalOverlay" onClick={() => setSelectedOrder(null)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedOrder(null); }}>
           <div className="modal" style={{ maxWidth: '560px' }}>
             <h3>Buyurtma tafsilotlari: {selectedOrder.id}</h3>
 
@@ -2648,7 +2648,7 @@ function AiPromptPanel({ api, addToast }) {
       </div>
 
       {isModalOpen && (
-        <div className="modalOverlay" onClick={() => setIsModalOpen(false)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
           <div className="modal">
             <h3>AI Prompt saqlash</h3>
             <form onSubmit={handleSave}>
@@ -2814,7 +2814,7 @@ function AppRoutePanel({ api, addToast }) {
       )}
 
       {isModalOpen && (
-        <div className="modalOverlay" onClick={() => setIsModalOpen(false)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
           <div className="modal">
             <h3>App Route {editItem ? 'tahrirlash' : 'qo\'shish'}</h3>
             <form onSubmit={handleSave}>
@@ -2976,7 +2976,7 @@ function AdminProfilePanel({ api, addToast }) {
       </button>
 
       {isPwModalOpen && (
-        <div className="modalOverlay" onClick={() => setIsPwModalOpen(false)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsPwModalOpen(false); }}>
           <div className="modal" style={{ width: '400px' }}>
             <h3>Parolni almashtirish</h3>
             <form onSubmit={handlePasswordChange}>
@@ -3169,7 +3169,7 @@ function SettingsPanel({ api, addToast }) {
       </div>
 
       {isModalOpen && (
-        <div className="modalOverlay" onClick={() => setIsModalOpen(false)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
           <div className="modal">
             <h3>Sozlama saqlash</h3>
             <form onSubmit={handleSave}>
@@ -3466,7 +3466,7 @@ function CustomPermissionPanel({ mode, api, addToast }) {
       )}
 
       {isModModalOpen && (
-        <div className="modalOverlay" onClick={() => setIsModModalOpen(false)}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsModModalOpen(false); }}>
           <div className="modal">
             <h3>{editModId ? "Modulni tahrirlash" : "Yangi modul"}</h3>
             <form onSubmit={handleSaveModule}>
