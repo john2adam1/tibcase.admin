@@ -1307,15 +1307,11 @@ function CasePanel({ api, addToast }) {
     e.preventDefault();
     setGenerating(true);
     try {
-      await api('/web/case/ai-generate', {
-        method: 'POST',
-        body: {
-          topic: aiGenTopic,
-          difficulty: aiGenDiff,
-          chief_complaint: aiGenComplaint,
-          expected_answer: aiGenAnswer
-        }
-      });
+      // Ixtiyoriy maydonlar bo'sh bo'lsa umuman yubormaymiz (bo'sh string 400 berishi mumkin)
+      const body = { topic: aiGenTopic.trim(), difficulty: aiGenDiff };
+      if (aiGenComplaint.trim()) body.chief_complaint = aiGenComplaint.trim();
+      if (aiGenAnswer.trim()) body.expected_answer = aiGenAnswer.trim();
+      await api('/web/case/ai-generate', { method: 'POST', body });
       addToast("AI case qoralamasi yaratildi (draft) — ro'yxatdan ko'rib chiqing", "ok");
       setIsAiGenOpen(false);
       load();
