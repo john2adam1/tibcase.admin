@@ -1,0 +1,1811 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TibSphereAI — Admin Panel (Review UI)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111827; --panel2:#1f2937; --border:#2d3748;
+    --text:#e5e7eb; --muted:#9ca3af; --accent:#3b82f6; --accent2:#2563eb;
+    --ok:#16a34a; --danger:#dc2626; --warn:#d97706;
+    font-size:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  a{color:var(--accent)}
+  button{cursor:pointer;font-family:inherit}
+  input,select,textarea{font-family:inherit;background:#0b1220;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 9px}
+  input:focus,select:focus,textarea:focus{outline:1px solid var(--accent)}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 12px}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent2)}
+  button.primary:hover{background:var(--accent2)}
+  button.danger{background:#3b1414;border-color:var(--danger);color:#fca5a5}
+  button.ok{background:#0f2e1c;border-color:var(--ok);color:#86efac}
+  button.sm{padding:4px 8px;font-size:12px}
+  .hidden{display:none!important}
+
+  #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .loginBox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px;width:340px}
+  .loginBox h1{font-size:18px;margin:0 0 4px}
+  .loginBox p{color:var(--muted);margin:0 0 18px;font-size:12px}
+  .field{margin-bottom:12px;display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:12px;color:var(--muted)}
+  .field input,.field select,.field textarea{width:100%}
+  #loginErr{color:#fca5a5;font-size:12px;min-height:16px}
+
+  #app{display:none;min-height:100vh;grid-template-columns:220px 1fr;grid-template-rows:52px 1fr;}
+  #app.show{display:grid}
+  #topbar{grid-column:1/3;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border);background:var(--panel)}
+  #topbar .brand{font-weight:700}
+  #topbar .right{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+  #sidebar{border-right:1px solid var(--border);background:var(--panel);overflow-y:auto;padding:10px}
+  #sidebar .grp{margin:10px 6px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  #sidebar button.nav{display:block;width:100%;text-align:left;background:transparent;border:none;border-radius:6px;padding:8px 10px;color:var(--text);margin-bottom:2px}
+  #sidebar button.nav:hover{background:var(--panel2)}
+  #sidebar button.nav.active{background:var(--accent);color:#fff}
+  #main{padding:18px;overflow-y:auto}
+
+  h2.pageTitle{margin:0 0 4px}
+  .pageDesc{color:var(--muted);font-size:12px;margin:0 0 16px}
+
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+  .toolbar .field{margin:0;min-width:130px}
+
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  thead th{background:var(--panel2);text-align:left;padding:8px 10px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+  tbody tr:hover{background:#151f30}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:var(--panel2);border:1px solid var(--border)}
+  .pager{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12px;color:var(--muted)}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .card .v{font-size:24px;font-weight:700}
+  .card .l{color:var(--muted);font-size:12px}
+
+  .modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow-y:auto;z-index:50}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:10px;width:560px;max-width:100%;padding:18px}
+  .modal h3{margin:0 0 12px}
+  .formGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .formGrid .full{grid-column:1/3}
+  .mlWrap{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .mlWrap .lang{font-size:10px;color:var(--muted);margin-bottom:2px}
+  .modalFooter{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .rowInline{display:flex;gap:6px}
+  .rowInline input{flex:1}
+
+  #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
+  .toast{background:var(--panel2);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:6px;padding:10px 14px;font-size:13px;max-width:340px}
+  .toast.err{border-left-color:var(--danger)}
+  .toast.ok{border-left-color:var(--ok)}
+
+  .breadcrumb{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:12px}
+  .breadcrumb span{color:var(--muted)}
+  .breadcrumb button{padding:3px 8px;font-size:12px}
+
+  .checkRow{display:flex;gap:14px;align-items:center}
+  .checkRow label{display:flex;gap:4px;align-items:center;font-size:12px}
+  .muted{color:var(--muted)}
+  code.small{font-size:11px;color:var(--muted)}
+  .kv{display:flex;flex-direction:column;gap:6px;font-size:13px}
+  .kv div span.k{color:var(--muted);display:inline-block;min-width:150px}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="loginBox">
+    <h1>TibSphereAI Admin</h1>
+    <p>Review UI — barcha /web API'lariga ulanadi. Faqat lokal ko'rib chiqish uchun.</p>
+    <div class="field">
+      <label>Backend Base URL</label>
+      <input id="baseUrlInput" value="https://dev-medic.axadjonovsardorbek.uz">
+    </div>
+    <div class="field">
+      <label>Login</label>
+      <input id="loginInput" autocomplete="username" placeholder="admin">
+    </div>
+    <div class="field">
+      <label>Parol</label>
+      <input id="passInput" type="password" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <div id="loginErr"></div>
+    <button class="primary" style="width:100%" onclick="doLogin()">Kirish</button>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div id="topbar">
+    <div class="brand">🩺 TibSphereAI Admin</div>
+    <div class="right">
+      <span id="whoami"></span>
+      <span id="baseUrlShow" class="muted"></span>
+      <button class="sm" onclick="logout()">Chiqish</button>
+    </div>
+  </div>
+  <div id="sidebar"></div>
+  <div id="main"></div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* ============================================================
+   STATE + API CORE
+   ============================================================ */
+const state = {
+  baseUrl: localStorage.getItem('ts_base') || 'https://dev-medic.axadjonovsardorbek.uz',
+  access: localStorage.getItem('ts_access') || '',
+  refresh: localStorage.getItem('ts_refresh') || '',
+  role: localStorage.getItem('ts_role') || '',
+  uid: localStorage.getItem('ts_uid') || '',
+  currentTab: null,
+};
+
+function toast(msg, kind){
+  const box = document.createElement('div');
+  box.className = 'toast ' + (kind || '');
+  box.textContent = msg;
+  document.getElementById('toasts').appendChild(box);
+  // Xato xabarlari (ayniqsa validatsiya tafsilotlari bilan) uzunroq bo'lishi
+  // mumkin - o'qib ulgurish uchun ko'proq vaqt beramiz.
+  setTimeout(()=>box.remove(), kind === 'err' ? 9000 : 4500);
+}
+
+// refreshInFlight - bir vaqtda ko'p so'rov 401 olsa ham, refresh faqat bir marta
+// chaqirilsin uchun (parallel so'rovlar shu bitta promise'ni kutadi).
+let refreshInFlight = null;
+async function doRefreshToken(){
+  if(!state.refresh) return false;
+  if(!refreshInFlight){
+    refreshInFlight = (async ()=>{
+      try{
+        const res = await fetch(state.baseUrl.replace(/\/$/,'') + '/auth/token/refresh', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({refresh_token: state.refresh}),
+        });
+        if(!res.ok) return false;
+        const data = await res.json();
+        if(!data || !data.access_token) return false;
+        state.access = data.access_token;
+        state.refresh = data.refresh_token || state.refresh;
+        localStorage.setItem('ts_access', state.access);
+        localStorage.setItem('ts_refresh', state.refresh);
+        return true;
+      }catch(e){ return false; }
+    })();
+  }
+  const ok = await refreshInFlight;
+  refreshInFlight = null;
+  return ok;
+}
+
+async function api(path, {method='GET', body=null, isForm=false, query=null} = {}, _retry=true){
+  let url = state.baseUrl.replace(/\/$/,'') + path;
+  if(query){
+    const qs = Object.entries(query).filter(([,v])=>v!==undefined && v!==null && v!=='').map(([k,v])=>encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
+    if(qs) url += (url.includes('?')?'&':'?') + qs;
+  }
+  const headers = {};
+  if(state.access) headers['Authorization'] = 'Bearer ' + state.access;
+  let fetchBody = undefined;
+  if(isForm){
+    fetchBody = body; // FormData, no content-type header (browser sets boundary)
+  } else if(body !== null && body !== undefined){
+    headers['Content-Type'] = 'application/json';
+    fetchBody = JSON.stringify(body);
+  }
+  let res;
+  try{
+    res = await fetch(url, {method, headers, body: fetchBody});
+  }catch(e){
+    toast('Tarmoq xatosi: ' + e.message + ' (Base URL / CORS / server ishlayaptimi tekshiring)', 'err');
+    throw e;
+  }
+  // access token muddati tugagan bo'lsa - refresh_token bilan avtomatik yangilab,
+  // so'rovni bir marta qaytadan yuboramiz (foydalanuvchi hech narsa sezmaydi).
+  if(res.status === 401 && _retry && state.refresh && path !== '/auth/token/refresh'){
+    const ok = await doRefreshToken();
+    if(ok) return api(path, {method, body, isForm, query}, false);
+    logout();
+    toast('Sessiya tugagan, qaytadan kiring', 'err');
+    const err = new Error('session expired'); err.status = 401;
+    throw err;
+  }
+  let data = null;
+  const text = await res.text();
+  try{ data = text ? JSON.parse(text) : null; }catch(e){ data = text; }
+  if(!res.ok){
+    let msg = 'Xatolik (' + res.status + ')';
+    if(data && data.error && data.error.message) msg = data.error.message + (data.error.details ? (' — ' + data.error.details) : '');
+    else if(data && data.message) msg = data.message;
+    else if(typeof data === 'string' && data) msg = data;
+    if(res.status === 401) msg = 'Sessiya tugagan yoki token noto\'g\'ri. Qayta login qiling. (' + msg + ')';
+    toast(msg, 'err');
+    const err = new Error(msg); err.status = res.status; err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+/* Extracts array + count from heterogeneous list responses:
+   {"banners":[...],"count":n} | {"data":[...]} | plain array | {"orders":[...]} etc. */
+function extractList(json){
+  // Ko'p ro'yxat endpointlari models.PaginationResponse bilan qaytadi:
+  // {total,page,limit,total_pages,has_previous,has_next,data:[...]} - haqiqiy son "total"da.
+  if(Array.isArray(json)) return {items: json, count: json.length};
+  if(json && typeof json === 'object'){
+    for(const k of Object.keys(json)){
+      if(Array.isArray(json[k])){
+        const count = typeof json.total === 'number' ? json.total : (typeof json.count === 'number' ? json.count : json[k].length);
+        return {items: json[k], count};
+      }
+    }
+  }
+  return {items: [], count: 0};
+}
+
+function fmtCell(v){
+  if(v === null || v === undefined) return '<span class="muted">—</span>';
+  if(typeof v === 'boolean') return v ? '✅' : '⬜️';
+  if(typeof v === 'object'){
+    // multilingual map or nested object -> compact display
+    if(v.uz !== undefined || v.ru !== undefined || v.en !== undefined){
+      return esc(v.uz || v.ru || v.en || '');
+    }
+    const s = JSON.stringify(v);
+    return '<code class="small" title="'+esc(s)+'">'+esc(s.length>60?s.slice(0,60)+'…':s)+'</code>';
+  }
+  const s = String(v);
+  return esc(s.length>140 ? s.slice(0,140)+'…' : s);
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function getPath(obj, path){
+  return path.split('.').reduce((o,k)=> (o && o[k]!==undefined) ? o[k] : undefined, obj);
+}
+function setPath(obj, path, val){
+  const parts = path.split('.');
+  let o = obj;
+  for(let i=0;i<parts.length-1;i++){
+    if(typeof o[parts[i]] !== 'object' || o[parts[i]] === null) o[parts[i]] = {};
+    o = o[parts[i]];
+  }
+  o[parts[parts.length-1]] = val;
+}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+async function doLogin(){
+  const base = document.getElementById('baseUrlInput').value.trim();
+  const login = document.getElementById('loginInput').value.trim();
+  const password = document.getElementById('passInput').value;
+  document.getElementById('loginErr').textContent = '';
+  if(!base || !login || !password){
+    document.getElementById('loginErr').textContent = 'Barcha maydonlarni to\'ldiring';
+    return;
+  }
+  state.baseUrl = base;
+  try{
+    const res = await fetch(base.replace(/\/$/,'') + '/web/auth/admin/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({login, password})
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      const msg = (data && data.error && data.error.message) || 'Login xato';
+      document.getElementById('loginErr').textContent = msg;
+      return;
+    }
+    state.access = data.access_token || '';
+    state.refresh = data.refresh_token || '';
+    state.role = data.role || '';
+    state.uid = data.id || '';
+    localStorage.setItem('ts_base', state.baseUrl);
+    localStorage.setItem('ts_access', state.access);
+    localStorage.setItem('ts_refresh', state.refresh);
+    localStorage.setItem('ts_role', state.role);
+    localStorage.setItem('ts_uid', state.uid);
+    startApp();
+  }catch(e){
+    document.getElementById('loginErr').textContent = 'Ulanib bo\'lmadi: ' + e.message;
+  }
+}
+
+function logout(){
+  localStorage.removeItem('ts_access');
+  localStorage.removeItem('ts_refresh');
+  localStorage.removeItem('ts_role');
+  localStorage.removeItem('ts_uid');
+  state.access=''; state.refresh=''; state.role=''; state.uid='';
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('loginScreen').style.display='flex';
+}
+
+/* ============================================================
+   FILE UPLOAD helper (used inline next to "file" fields)
+   ============================================================ */
+function uploadButton(onDone){
+  const btn = document.createElement('button');
+  btn.type='button'; btn.className='sm'; btn.textContent='📤 Yuklash';
+  const input = document.createElement('input');
+  input.type='file'; input.className='hidden';
+  input.addEventListener('change', async ()=>{
+    if(!input.files[0]) return;
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    try{
+      const res = await api('/web/file-upload', {method:'POST', body:fd, isForm:true});
+      onDone(res.Url || res.url || '');
+      toast('Fayl yuklandi', 'ok');
+    }catch(e){}
+    input.value='';
+  });
+  btn.onclick = ()=>input.click();
+  const wrap = document.createElement('span');
+  wrap.appendChild(btn); wrap.appendChild(input);
+  return wrap;
+}
+
+/* ============================================================
+   GENERIC FORM BUILDER
+   fields: [{name, label, type: text|textarea|number|checkbox|select|ml|json|file, options, async,
+             showIf: (allValues)=>bool - boshqa maydon qiymatiga qarab shu maydonni ko'rsatish/yashirish}]
+   ============================================================ */
+function buildFormField(container, f, values, refData, onChange){
+  const wrap = document.createElement('div');
+  wrap.className = 'field' + (f.full ? ' full' : '');
+  const label = document.createElement('label');
+  label.textContent = f.label + (f.required ? ' *' : '');
+  wrap.appendChild(label);
+
+  if(f.type === 'ml'){
+    const mw = document.createElement('div'); mw.className='mlWrap';
+    const cur = getPath(values, f.name) || {};
+    ['uz','ru','en'].forEach(l=>{
+      const sub = document.createElement('div');
+      const lb = document.createElement('div'); lb.className='lang'; lb.textContent=l.toUpperCase();
+      const inp = document.createElement(f.textarea ? 'textarea' : 'input');
+      inp.dataset.mlLang = l;
+      inp.value = cur[l] || '';
+      sub.appendChild(lb); sub.appendChild(inp);
+      mw.appendChild(sub);
+    });
+    wrap.appendChild(mw);
+    if(f.upload){
+      const upRow = document.createElement('div'); upRow.style.marginTop='6px';
+      upRow.appendChild(uploadButton(url => {
+        mw.querySelectorAll('[data-ml-lang]').forEach(el => el.value = url);
+      }));
+      wrap.appendChild(upRow);
+    }
+    wrap._getValue = () => {
+      const o = {};
+      mw.querySelectorAll('[data-ml-lang]').forEach(el => o[el.dataset.mlLang] = el.value);
+      return o;
+    };
+  } else if(f.type === 'textarea' || f.type === 'json'){
+    const ta = document.createElement('textarea');
+    ta.rows = f.rows || 3;
+    let v = getPath(values, f.name);
+    if(f.type === 'json' && v !== undefined && typeof v === 'object') v = JSON.stringify(v, null, 2);
+    ta.value = v ?? '';
+    wrap.appendChild(ta);
+    wrap._getValue = () => {
+      if(f.type === 'json'){
+        const raw = ta.value.trim();
+        if(!raw) return f.jsonDefault !== undefined ? f.jsonDefault : {};
+        try{ return JSON.parse(raw); }catch(e){ throw new Error('"'+f.label+'" — JSON noto\'g\'ri: ' + e.message); }
+      }
+      return ta.value;
+    };
+  } else if(f.type === 'checkbox'){
+    const inp = document.createElement('input');
+    inp.type='checkbox'; inp.checked = !!getPath(values, f.name);
+    wrap.style.flexDirection='row'; wrap.style.alignItems='center'; wrap.style.gap='8px';
+    wrap.appendChild(inp);
+    wrap._getValue = () => inp.checked;
+  } else if(f.type === 'select'){
+    const sel = document.createElement('select');
+    const opts = f.options || [];
+    opts.forEach(o=>{
+      const op = document.createElement('option');
+      op.value = o.value; op.textContent = o.label;
+      sel.appendChild(op);
+    });
+    sel.value = getPath(values, f.name) ?? (opts[0] ? opts[0].value : '');
+    wrap.appendChild(sel);
+    wrap._getValue = () => sel.value;
+  } else if(f.type === 'file'){
+    const row = document.createElement('div'); row.className='rowInline';
+    const inp = document.createElement('input');
+    inp.type='text'; inp.value = getPath(values, f.name) ?? '';
+    row.appendChild(inp);
+    row.appendChild(uploadButton(url => inp.value = url));
+    wrap.appendChild(row);
+    wrap._getValue = () => inp.value;
+  } else { // text / number / password
+    const inp = document.createElement('input');
+    inp.type = f.type === 'number' ? 'number' : (f.type === 'password' ? 'password' : 'text');
+    if(f.type === 'password') inp.autocomplete = 'new-password';
+    if(f.step) inp.step = f.step;
+    inp.value = getPath(values, f.name) ?? '';
+    wrap.appendChild(inp);
+    wrap._getValue = () => f.type === 'number' ? (inp.value === '' ? 0 : Number(inp.value)) : inp.value;
+  }
+  if(onChange){
+    wrap.addEventListener('input', onChange);
+    wrap.addEventListener('change', onChange);
+  }
+  container.appendChild(wrap);
+  return wrap;
+}
+
+function openModal({title, fields, values, onSubmit, refData}){
+  const overlay = document.createElement('div');
+  overlay.className = 'modalOverlay';
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = '<h3>' + esc(title) + '</h3>';
+  const grid = document.createElement('div');
+  grid.className = 'formGrid';
+  function applyShowIf(){
+    if(!fields.some(f => f.showIf)) return;
+    const cur = {};
+    fields.forEach((f, i) => { cur[f.name] = wraps[i]._getValue ? wraps[i]._getValue() : undefined; });
+    fields.forEach((f, i) => {
+      if(f.showIf) wraps[i].style.display = f.showIf(cur) ? '' : 'none';
+    });
+  }
+  const wraps = fields.map(f => buildFormField(grid, f, values || {}, refData, applyShowIf));
+  modal.appendChild(grid);
+  applyShowIf();
+  const footer = document.createElement('div');
+  footer.className = 'modalFooter';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Bekor qilish';
+  cancelBtn.onclick = () => overlay.remove();
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'primary';
+  submitBtn.textContent = 'Saqlash';
+  submitBtn.onclick = async () => {
+    const out = {};
+    try{
+      fields.forEach((f, i) => setPath(out, f.name, wraps[i]._getValue()));
+    }catch(e){
+      toast(e.message, 'err');
+      return;
+    }
+    submitBtn.disabled = true; submitBtn.textContent='Saqlanmoqda...';
+    try{
+      await onSubmit(out);
+      overlay.remove();
+    }catch(e){
+      submitBtn.disabled = false; submitBtn.textContent='Saqlash';
+    }
+  };
+  footer.appendChild(cancelBtn); footer.appendChild(submitBtn);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+function confirmDialog(msg){ return window.confirm(msg); }
+
+// showInfoModal - faqat "Yopish" tugmali, natija ko'rsatish uchun modal
+// (masalan AI sinov javobi + token/xarajat). openModal'dan farqi - forma emas.
+function showInfoModal(title, html){
+  const overlay = document.createElement('div');
+  overlay.className = 'modalOverlay';
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = '<h3>' + esc(title) + '</h3><div>' + html + '</div>';
+  const footer = document.createElement('div');
+  footer.className = 'modalFooter';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'primary';
+  closeBtn.textContent = 'Yopish';
+  closeBtn.onclick = () => overlay.remove();
+  footer.appendChild(closeBtn);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+// aiUsageBadge - test natijasidagi token/xarajatni bir xil ko'rinishda chiqarish.
+function aiUsageBadge(tokens, costUsd){
+  return '<p class="muted" style="margin-top:8px">🔢 Tokenlar: <b>'+esc(tokens ?? 0)+'</b> &nbsp;·&nbsp; 💵 Xarajat: <b>$'+esc((costUsd ?? 0).toFixed ? costUsd.toFixed(6) : costUsd)+'</b></p>';
+}
+
+/* ============================================================
+   MODULE REGISTRY (generic CRUD config per /web resource)
+   ============================================================ */
+const REF_CACHE = {}; // cached option lists (categories, topics, partners, roles...)
+async function loadRefOptions(kind){
+  if(REF_CACHE[kind]) return REF_CACHE[kind];
+  let items = [];
+  try{
+    if(kind === 'category'){
+      const r = await api('/web/category', {query:{limit:100,page:1}});
+      items = extractList(r).items.map(x => ({value:x.id, label: (x.name && (x.name.uz||x.name.ru||x.name.en)) || x.id}));
+    } else if(kind === 'topic'){
+      const r = await api('/web/topic', {query:{limit:200,page:1}});
+      items = extractList(r).items.map(x => ({value:x.id, label: (x.name && (x.name.uz||x.name.ru||x.name.en)) || x.id}));
+    } else if(kind === 'partner'){
+      const r = await api('/web/partner', {query:{limit:100,page:1}});
+      items = extractList(r).items.map(x => ({value:x.id, label: x.name || x.id}));
+    } else if(kind === 'role'){
+      const r = await api('/web/role', {query:{limit:100,page:1}});
+      items = extractList(r).items.map(x => ({value:x.id, label: x.name || x.id}));
+    } else if(kind === 'tariff'){
+      const r = await api('/web/tariff');
+      items = extractList(r).items.map(x => ({value:x.id, label: x.name || x.id}));
+    }
+  }catch(e){ items = []; }
+  REF_CACHE[kind] = items;
+  return items;
+}
+function invalidateRef(kind){ delete REF_CACHE[kind]; }
+
+const MODULES = {
+  banner: {
+    label:'Bannerlar', base:'/web/banner', listKey:'banners',
+    search:[{name:'title', label:'Sarlavha (qidiruv)', type:'text'}],
+    columns:['id','title','order_num','created_at'],
+    fields:[
+      {name:'title', label:'Sarlavha', type:'ml', required:true},
+      {name:'description', label:'Tavsif', type:'ml', textarea:true},
+      {name:'image_url', label:'Rasm URL (til bo\'yicha)', type:'ml', upload:true},
+      {name:'link_url', label:'Havola', type:'text'},
+      {name:'order_num', label:'Tartib raqami', type:'number'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+  about: {
+    label:'Biz haqimizda', base:'/web/about', listKey:'abouts',
+    search:[{name:'title', label:'Sarlavha (qidiruv)', type:'text'}],
+    columns:['id','title','order_num','created_at'],
+    fields:[
+      {name:'title', label:'Sarlavha', type:'ml', required:true},
+      {name:'description', label:'Tavsif', type:'ml', textarea:true},
+      {name:'link_url', label:'Havola', type:'text'},
+      {name:'order_num', label:'Tartib raqami', type:'number'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+  faq: {
+    label:'FAQ', base:'/web/faq', listKey:'faqs',
+    search:[{name:'question', label:'Savol (qidiruv)', type:'text'}],
+    columns:['id','question','order_num','created_at'],
+    fields:[
+      {name:'question', label:'Savol', type:'ml', required:true},
+      {name:'answer', label:'Javob', type:'ml', textarea:true},
+      {name:'order_num', label:'Tartib raqami', type:'number'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+  contact: {
+    label:'Kontaktlar', base:'/web/contact', listKey:'contacts',
+    search:[{name:'name', label:'Ism', type:'text'}, {name:'phone_number', label:'Telefon', type:'text'}],
+    columns:['id','name','phone_number','link_url','created_at'],
+    fields:[
+      {name:'name', label:'Ism', type:'text', required:true},
+      {name:'phone_number', label:'Telefon raqam', type:'text'},
+      {name:'link_url', label:'Havola', type:'text'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+  tariff: {
+    label:'Tariflar', base:'/web/tariff', listKey:'tariffs', noPagination:true,
+    search:[
+      {name:'duration', label:'Muddat (kun)', type:'number'},
+      {name:'kind', label:'Turi', type:'select', includeEmpty:true, options:[{value:'subscription',label:'Obuna'},{value:'coin_package',label:'Tanga paketi'}]},
+    ],
+    columns:['id','name','kind','duration','coins','price','created_at'],
+    fields:[
+      {name:'name', label:'Nomi', type:'text', required:true},
+      {name:'kind', label:'Turi', type:'select', options:[{value:'subscription',label:'Obuna (Premium)'},{value:'coin_package',label:'Tanga paketi'}]},
+      {name:'duration', label:'Muddat (oy)', type:'number', showIf: v => v.kind !== 'coin_package'},
+      {name:'coins', label:'Tanga soni', type:'number', showIf: v => v.kind === 'coin_package'},
+      {name:'price', label:'Narx (so\'m)', type:'number', step:'0.01'},
+      {name:'description', label:'Tavsif', type:'textarea'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+  category: {
+    label:'Bo\'limlar (Category)', base:'/web/category', listKey:'categories',
+    search:[
+      {name:'name', label:'Nomi (qidiruv)', type:'text'},
+      {name:'audience', label:'Rejim', type:'select', includeEmpty:true, options:[{value:'doctor',label:'👨‍⚕️ Shifokor'},{value:'citizen',label:'🚑 Aholi (Birinchi yordam)'}]},
+    ],
+    columns:['id','name','audience','order_num','created_at'],
+    fields:[
+      {name:'name', label:'Nomi', type:'ml', required:true},
+      {name:'icon_url', label:'Ikonka URL', type:'file'},
+      {name:'audience', label:'Rejim (Home ekran toggle)', type:'select', options:[{value:'doctor',label:'👨‍⚕️ Shifokor'},{value:'citizen',label:'🚑 Aholi (Birinchi yordam)'}]},
+      {name:'order_num', label:'Tartib raqami', type:'number'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+    onSaved:()=>invalidateRef('category'),
+  },
+  topic: {
+    label:'Mavzular (Topic)', base:'/web/topic', listKey:'topics',
+    search:[{name:'category_id', label:'Bo\'lim', type:'select', asyncOptions:'category', includeEmpty:true}],
+    columns:['id','category_id','name','order_num','created_at'],
+    fields:[
+      {name:'category_id', label:'Bo\'lim', type:'select', asyncOptions:'category', required:true},
+      {name:'name', label:'Nomi', type:'ml', required:true},
+      {name:'order_num', label:'Tartib raqami', type:'number'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+    onSaved:()=>invalidateRef('topic'),
+  },
+  case: {
+    label:'Klinik case\'lar', base:'/web/case', listKey:'cases',
+    search:[
+      {name:'topic_id', label:'Mavzu', type:'select', asyncOptions:'topic', includeEmpty:true},
+      {name:'category_id', label:'Bo\'lim', type:'select', asyncOptions:'category', includeEmpty:true},
+      {name:'difficulty', label:'Qiyinlik', type:'select', includeEmpty:true, options:[{value:'easy',label:'Easy'},{value:'medium',label:'Medium'},{value:'hard',label:'Hard'}]},
+      {name:'status', label:'Status', type:'select', includeEmpty:true, options:[{value:'draft',label:'Draft'},{value:'published',label:'Published'}]},
+      {name:'search', label:'Qidiruv', type:'text'},
+    ],
+    columns:['id','title','topic_id','difficulty','status','patient_age','created_at'],
+    fields:[
+      {name:'topic_id', label:'Mavzu', type:'select', asyncOptions:'topic', required:true},
+      {name:'title', label:'Sarlavha', type:'ml', required:true},
+      {name:'subtitle', label:'Kichik sarlavha', type:'ml'},
+      {name:'chief_complaint', label:'Chief complaint (shikoyat)', type:'ml', textarea:true},
+      {name:'expected_answer', label:'Kutilgan javob', type:'textarea'},
+      {name:'cover_image_url', label:'Muqova rasm', type:'file'},
+      {name:'difficulty', label:'Qiyinlik', type:'select', options:[{value:'easy',label:'Easy'},{value:'medium',label:'Medium'},{value:'hard',label:'Hard'}]},
+      {name:'patient_age', label:'Bemor yoshi', type:'number'},
+      {name:'patient_gender', label:'Bemor jinsi', type:'select', options:[{value:'male',label:'Erkak'},{value:'female',label:'Ayol'}]},
+      {name:'expected_duration_minutes', label:'Kutilgan davomiylik (min)', type:'number'},
+      {name:'visual_state', label:'Vizual holat (kod)', type:'text'},
+      {name:'initial_vitals.hr', label:'Vitals: HR', type:'number'},
+      {name:'initial_vitals.bp', label:'Vitals: BP', type:'text'},
+      {name:'initial_vitals.spo2', label:'Vitals: SpO2', type:'number'},
+      {name:'initial_vitals.rr', label:'Vitals: RR', type:'number'},
+      {name:'initial_vitals.temp', label:'Vitals: Temp', type:'number', step:'0.1'},
+      {name:'initial_vitals.gcs', label:'Vitals: GCS', type:'number'},
+      {name:'scenario', label:'Scenario (JSON, AI uchun erkin tuzilma)', type:'json', full:true, rows:8, jsonDefault:{}},
+      {name:'order_num', label:'Tartib raqami', type:'number'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+    onSaved:()=>invalidateRef('topic'),
+    rowActions:(row, refresh)=>{
+      const actions = [];
+      if(row.status !== 'published'){
+        const b = document.createElement('button'); b.className='sm ok'; b.textContent='Publish';
+        b.onclick = async ()=>{
+          try{ await api('/web/case/'+row.id+'/publish', {method:'PUT'}); toast('Case published','ok'); refresh(); }catch(e){}
+        };
+        actions.push(b);
+      }
+      const testChat = document.createElement('button'); testChat.className='sm'; testChat.textContent='🧪 Bemor AI';
+      testChat.title = 'Gemini haqiqiy javob berayotganini va tokenlar/xarajatni tekshirish';
+      testChat.onclick = ()=>{
+        openModal({
+          title:'Bemor AI sinovi — case: '+(row.title && (row.title.uz||row.title.ru||row.title.en) || row.id),
+          fields:[
+            {name:'question', label:'Shifokor savoli', type:'textarea', rows:3, required:true, full:true},
+          ],
+          values:{question:'Sizni qayerda og\'riq bezovta qilyapti?'},
+          onSubmit: async(body)=>{
+            const res = await api('/web/ai-prompt/test-patient', {method:'POST', body:{case_id:row.id, question:body.question}});
+            const html = res.is_action
+              ? '<p>'+(res.is_correct?'✅ To\'g\'ri':'⚠️ Xato')+' (sog\'liq: '+(res.health_delta>0?'+':'')+res.health_delta+'%)</p><p>'+esc(res.feedback||'')+'</p>'
+              : '<p>'+esc(res.reply||'')+'</p>';
+            showInfoModal('Chat javobi (bemor yoki platforma)', html + aiUsageBadge(res.tokens, res.cost_usd));
+          }
+        });
+      };
+      actions.push(testChat);
+
+      const testDebrief = document.createElement('button'); testDebrief.className='sm'; testDebrief.textContent='🧪 Debrief AI';
+      testDebrief.title = 'Namuna qadamlar (events) bo\'yicha debriefing hisobotini sinash';
+      testDebrief.onclick = ()=>{
+        openModal({
+          title:'Debrief AI sinovi — case: '+(row.title && (row.title.uz||row.title.ru||row.title.en) || row.id),
+          fields:[
+            {name:'events', label:'Qadamlar (JSON ro\'yxat: type + payload)', type:'json', full:true, rows:8, jsonDefault:[]},
+          ],
+          values:{events:[{type:'question', payload:{question:'Qayerda og\'riq bor?'}}, {type:'medication', payload:{name:'Aspirin', dose:'300mg', route:'oral'}}]},
+          onSubmit: async(body)=>{
+            const res = await api('/web/ai-prompt/test-debrief', {method:'POST', body:{case_id:row.id, events:body.events||[]}});
+            const rep = res.report || {};
+            const html = '<p><b>To\'g\'ri qadamlar:</b> '+esc((rep.correct_steps||[]).join(', ')||'—')+'</p>'+
+              '<p><b>Noto\'g\'ri qadamlar:</b> '+esc((rep.incorrect_steps||[]).join(', ')||'—')+'</p>'+
+              '<p><b>Qo\'llanma izohi:</b> '+esc(rep.guideline_notes||'—')+'</p>'+
+              '<p><b>Zaif mavzular:</b> '+esc((rep.weak_topics||[]).join(', ')||'—')+'</p>' + aiUsageBadge(res.tokens, res.cost_usd);
+            showInfoModal('Debrief AI natijasi', html);
+          }
+        });
+      };
+      actions.push(testDebrief);
+      return actions;
+    },
+    extraToolbar:(refresh)=>{
+      const b = document.createElement('button'); b.className='primary'; b.textContent='🤖 AI bilan yaratish';
+      b.onclick = ()=>{
+        openModal({
+          title:'AI yordamida case generatsiyasi',
+          fields:[
+            {name:'topic', label:'Mavzu (matn)', type:'text', required:true},
+            {name:'difficulty', label:'Qiyinlik', type:'select', options:[{value:'easy',label:'Easy'},{value:'medium',label:'Medium'},{value:'hard',label:'Hard'}]},
+            {name:'chief_complaint', label:'Bemor shikoyati (ixtiyoriy - AI shu asosda quradi)', type:'textarea'},
+            {name:'expected_answer', label:'To\'g\'ri javob/tashxis (ixtiyoriy - aynan shu saqlanadi)', type:'textarea'},
+          ],
+          values:{},
+          onSubmit: async (body)=>{
+            await api('/web/case/ai-generate', {method:'POST', body});
+            toast('AI case qoralamasi yaratildi (draft) — ro\'yxatdan ko\'rib chiqing', 'ok');
+            refresh();
+          }
+        });
+      };
+      return [b];
+    }
+  },
+  partner: {
+    label:'Hamkorlar', base:'/web/partner', listKey:'partners',
+    search:[{name:'name', label:'Nomi (qidiruv)', type:'text'}],
+    columns:['id','name','link_url','created_at'],
+    fields:[
+      {name:'name', label:'Nomi', type:'text', required:true},
+      {name:'image_url', label:'Rasm', type:'file'},
+      {name:'link_url', label:'Havola', type:'text'},
+      {name:'description', label:'Tavsif', type:'ml', textarea:true},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+    onSaved:()=>invalidateRef('partner'),
+  },
+  promocode: {
+    label:'Promokodlar', base:'/web/promocode', listKey:'promocodes',
+    search:[
+      {name:'partner_id', label:'Hamkor', type:'select', asyncOptions:'partner', includeEmpty:true},
+      {name:'status', label:'Status', type:'select', includeEmpty:true, options:[{value:'active',label:'Active'},{value:'used',label:'Used'},{value:'expired',label:'Expired'}]},
+    ],
+    columns:['id','code','partner_id','value','status','issued_at','expires_at'],
+    fields:[
+      {name:'partner_id', label:'Hamkor', type:'select', asyncOptions:'partner', required:true},
+      {name:'value', label:'Qiymat (tanga)', type:'number', required:true},
+      {name:'created_by', label:'Yaratuvchi (admin id)', type:'text'},
+      {name:'expires_at', label:'Amal qilish muddati (YYYY-MM-DD)', type:'text'},
+    ],
+    canCreate:true, canUpdate:false, canDelete:true,
+  },
+  admin: {
+    label:'Adminlar', base:'/web/admin', listKey:'admins',
+    search:[{name:'login', label:'Login (qidiruv)', type:'text'}],
+    columns:['id','login','role_name','partner_name','created_at'],
+    fields:[
+      {name:'login', label:'Login', type:'text', required:true},
+      {name:'password', label:'Parol', type:'password', required:true},
+      {name:'role_id', label:'Rol', type:'select', asyncOptions:'role', includeEmpty:true},
+      {name:'partner_id', label:'Hamkor (faqat "Hamkor Admin" roli uchun)', type:'select', asyncOptions:'partner', includeEmpty:true},
+    ],
+    updateFields:[
+      {name:'login', label:'Login', type:'text', required:true},
+      {name:'role_id', label:'Rol', type:'select', asyncOptions:'role', includeEmpty:true},
+      {name:'partner_id', label:'Hamkor (faqat "Hamkor Admin" roli uchun)', type:'select', asyncOptions:'partner', includeEmpty:true},
+      {name:'password', label:'Yangi parol (bo\'sh — o\'zgarmaydi)', type:'password'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+  role: {
+    label:'Rollar', base:'/web/role', listKey:'roles',
+    search:[{name:'name', label:'Nomi (qidiruv)', type:'text'}],
+    columns:['id','name','slug','is_system','created_at'],
+    fields:[
+      {name:'name', label:'Nomi', type:'text', required:true},
+      {name:'slug', label:'Slug', type:'text', required:true},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+    onSaved:()=>invalidateRef('role'),
+  },
+  level: {
+    label:'Levellar', base:'/web/level', listKey:null,
+    search:[],
+    columns:['id','level_number','slug','required_xp','xp_reward','coin_reward','title'],
+    fields:[
+      {name:'level_number', label:'Level raqami', type:'number', required:true},
+      {name:'slug', label:'Slug (o\'zgarmas kod)', type:'text', required:true},
+      {name:'required_xp', label:'Kerakli XP', type:'number'},
+      {name:'xp_reward', label:'Case yakunida XP (bazaviy)', type:'number'},
+      {name:'coin_reward', label:'Case yakunida Coin (bazaviy)', type:'number'},
+      {name:'title', label:'Sarlavha', type:'text'},
+      {name:'badge_image_url', label:'Belgi rasmi', type:'file'},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+  notification: {
+    label:'Bildirishnomalar', base:'/web/notification', listKey:'notifications',
+    search:[{name:'title', label:'Sarlavha (qidiruv)', type:'text'}],
+    columns:['id','title','type','created_at'],
+    fields:[
+      {name:'title', label:'Sarlavha', type:'ml', required:true},
+      {name:'message', label:'Matn', type:'ml', textarea:true},
+      {name:'type', label:'Turi', type:'select', options:[{value:'all',label:'Hammaga (all)'},{value:'selected',label:'Tanlangan foydalanuvchi (selected)'}]},
+      {name:'user_id', label:'Foydalanuvchi ID (type=selected bo\'lsa)', type:'text'},
+    ],
+    updateFields:[
+      {name:'title', label:'Sarlavha', type:'ml', required:true},
+      {name:'message', label:'Matn', type:'ml', textarea:true},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+  },
+};
+
+/* ============================================================
+   GENERIC CRUD PANEL RENDERER
+   ============================================================ */
+async function resolveOptions(f){
+  let opts = f.options ? f.options.slice() : [];
+  if(f.asyncOptions) opts = (await loadRefOptions(f.asyncOptions)).slice();
+  if(f.includeEmpty) opts = [{value:'', label:'— hammasi —'}].concat(opts);
+  return opts;
+}
+
+async function renderGenericModule(key){
+  const cfg = MODULES[key];
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+
+  const h = document.createElement('h2'); h.className='pageTitle'; h.textContent = cfg.label;
+  main.appendChild(h);
+  const desc = document.createElement('p'); desc.className='pageDesc'; desc.textContent = cfg.base;
+  main.appendChild(desc);
+
+  const toolbar = document.createElement('div'); toolbar.className='toolbar';
+  main.appendChild(toolbar);
+
+  const tableWrap = document.createElement('div');
+  main.appendChild(tableWrap);
+
+  const pager = document.createElement('div'); pager.className='pager';
+  main.appendChild(pager);
+
+  let page = 1, limit = 10;
+  const filters = {};
+
+  // search fields
+  for(const sf of cfg.search){
+    const f = document.createElement('div'); f.className='field';
+    const l = document.createElement('label'); l.textContent = sf.label; f.appendChild(l);
+    let input;
+    if(sf.type === 'select'){
+      input = document.createElement('select');
+      const opts = await resolveOptions(sf);
+      opts.forEach(o=>{ const op=document.createElement('option'); op.value=o.value; op.textContent=o.label; input.appendChild(op); });
+    } else {
+      input = document.createElement('input');
+      input.type = sf.type === 'number' ? 'number' : 'text';
+    }
+    input.addEventListener('change', ()=>{ filters[sf.name] = input.value; page=1; load(); });
+    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ filters[sf.name]=input.value; page=1; load(); }});
+    f.appendChild(input);
+    toolbar.appendChild(f);
+  }
+
+  const searchBtn = document.createElement('button'); searchBtn.textContent='🔍 Qidirish';
+  searchBtn.onclick = ()=>{ page=1; load(); };
+  toolbar.appendChild(searchBtn);
+
+  if(cfg.canCreate){
+    const addBtn = document.createElement('button'); addBtn.className='primary'; addBtn.textContent='+ Yangi';
+    addBtn.onclick = ()=> openCreate();
+    toolbar.appendChild(addBtn);
+  }
+  if(cfg.extraToolbar){
+    cfg.extraToolbar(load).forEach(b=>toolbar.appendChild(b));
+  }
+
+  async function openCreate(){
+    const refFields = await Promise.all(cfg.fields.map(async f=>{
+      if(f.asyncOptions){ const nf = Object.assign({}, f); nf.options = await resolveOptions(f); nf.type='select'; return nf; }
+      return f;
+    }));
+    openModal({
+      title: 'Yangi: ' + cfg.label,
+      fields: refFields,
+      values: {},
+      onSubmit: async (body)=>{
+        await api(cfg.base, {method:'POST', body});
+        toast('Yaratildi', 'ok');
+        if(cfg.onSaved) cfg.onSaved();
+        load();
+      }
+    });
+  }
+
+  async function openEdit(row){
+    const editFields = cfg.updateFields || cfg.fields;
+    const refFields = await Promise.all(editFields.map(async f=>{
+      if(f.asyncOptions){ const nf = Object.assign({}, f); nf.options = await resolveOptions(f); nf.type='select'; return nf; }
+      return f;
+    }));
+    let values = row;
+    if(cfg.fetchOne){
+      try{ values = await api(cfg.base + '/' + row.id); }catch(e){ values = row; }
+    }
+    openModal({
+      title: 'Tahrirlash: ' + cfg.label,
+      fields: refFields,
+      values,
+      onSubmit: async (body)=>{
+        await api(cfg.base + '/' + row.id + '/update', {method:'PUT', body});
+        toast('Saqlandi', 'ok');
+        if(cfg.onSaved) cfg.onSaved();
+        load();
+      }
+    });
+  }
+
+  async function doDelete(row){
+    if(!confirmDialog('Rostdan o\'chirilsinmi? ID: ' + row.id)) return;
+    try{
+      await api(cfg.base + '/' + row.id + '/delete', {method:'DELETE'});
+      toast('O\'chirildi', 'ok');
+      if(cfg.onSaved) cfg.onSaved();
+      load();
+    }catch(e){}
+  }
+
+  async function load(){
+    tableWrap.innerHTML = '<p class="muted">Yuklanmoqda...</p>';
+    const query = Object.assign({}, filters);
+    if(!cfg.noPagination) Object.assign(query, {limit, page});
+    let json;
+    try{
+      json = await api(cfg.base, {query});
+    }catch(e){
+      tableWrap.innerHTML = '<p class="muted">Xatolik yuz berdi.</p>';
+      return;
+    }
+    const {items, count} = extractList(json);
+    renderTable(items);
+    pager.innerHTML = '';
+    if(!cfg.noPagination){
+      const info = document.createElement('span');
+      const totalPages = Math.max(1, Math.ceil((count||items.length)/limit));
+      info.textContent = 'Sahifa ' + page + ' / ' + totalPages + ' — jami: ' + (count ?? items.length);
+      const prev = document.createElement('button'); prev.className='sm'; prev.textContent='← Oldingi';
+      prev.disabled = page<=1; prev.onclick=()=>{ page--; load(); };
+      const next = document.createElement('button'); next.className='sm'; next.textContent='Keyingi →';
+      next.disabled = page>=totalPages; next.onclick=()=>{ page++; load(); };
+      const limSel = document.createElement('select');
+      [10,20,50,100].forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n+'/sahifa'; if(n===limit)o.selected=true; limSel.appendChild(o); });
+      limSel.onchange = ()=>{ limit=Number(limSel.value); page=1; load(); };
+      pager.appendChild(prev); pager.appendChild(info); pager.appendChild(next); pager.appendChild(limSel);
+    } else {
+      const info = document.createElement('span'); info.textContent = 'Jami: ' + items.length;
+      pager.appendChild(info);
+    }
+  }
+
+  function renderTable(items){
+    if(!items.length){ tableWrap.innerHTML = '<p class="muted">Ma\'lumot topilmadi.</p>'; return; }
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    cfg.columns.forEach(c=>{ const th=document.createElement('th'); th.textContent=c; trh.appendChild(th); });
+    const thAct = document.createElement('th'); thAct.textContent='Amallar'; trh.appendChild(thAct);
+    thead.appendChild(trh); table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    items.forEach(row=>{
+      const tr = document.createElement('tr');
+      cfg.columns.forEach(c=>{
+        const td = document.createElement('td');
+        td.innerHTML = fmtCell(row[c]);
+        tr.appendChild(td);
+      });
+      const tdA = document.createElement('td');
+      const actions = document.createElement('div'); actions.className='actions';
+      if(cfg.canUpdate){
+        const eb = document.createElement('button'); eb.className='sm'; eb.textContent='✏️ Tahrir';
+        eb.onclick = ()=>openEdit(row);
+        actions.appendChild(eb);
+      }
+      if(cfg.rowActions){
+        cfg.rowActions(row, load).forEach(b=>actions.appendChild(b));
+      }
+      if(cfg.canDelete){
+        const db = document.createElement('button'); db.className='sm danger'; db.textContent='🗑 O\'chirish';
+        db.onclick = ()=>doDelete(row);
+        actions.appendChild(db);
+      }
+      tdA.appendChild(actions);
+      tr.appendChild(tdA);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    tableWrap.innerHTML=''; tableWrap.appendChild(table);
+  }
+
+  load();
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+async function renderDashboard(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">Dashboard</h2><p class="pageDesc">/web/dashboard</p>';
+
+  const toolbar = document.createElement('div'); toolbar.className='toolbar';
+  const typeSel = document.createElement('select');
+  [['','—'],['day','Kun'],['week','Hafta'],['month','Oy'],['year','Yil'],['range','Oraliq']].forEach(([v,l])=>{
+    const o=document.createElement('option'); o.value=v; o.textContent=l; typeSel.appendChild(o);
+  });
+  const dayInp = document.createElement('input'); dayInp.type='date'; dayInp.placeholder='YYYY-MM-DD';
+  const fromInp = document.createElement('input'); fromInp.type='date';
+  const toInp = document.createElement('input'); toInp.type='date';
+  [ ['Turi',typeSel], ['Kun',dayInp], ['Dan',fromInp], ['Gacha',toInp] ].forEach(([lb,el])=>{
+    const f=document.createElement('div'); f.className='field';
+    const l=document.createElement('label'); l.textContent=lb; f.appendChild(l); f.appendChild(el);
+    toolbar.appendChild(f);
+  });
+  const btn = document.createElement('button'); btn.className='primary'; btn.textContent='Yangilash';
+  btn.onclick = load;
+  toolbar.appendChild(btn);
+  main.appendChild(toolbar);
+
+  const cards = document.createElement('div'); cards.className='cards';
+  main.appendChild(cards);
+
+  async function load(){
+    const query = {};
+    if(typeSel.value) query.type = typeSel.value;
+    if(dayInp.value) query.day = dayInp.value;
+    if(fromInp.value) query.from = fromInp.value;
+    if(toInp.value) query.to = toInp.value;
+    let data;
+    try{ data = await api('/web/dashboard', {query}); }catch(e){ return; }
+    const items = [
+      ['Bo\'limlar', data.categories],
+      ['Case\'lar', data.cases],
+      ['Foydalanuvchilar', data.users],
+      ['Faol foydalanuvchilar', data.active_users],
+      ['Faol obunalar', data.active_subscriptions],
+      ['Yakunlangan sessiyalar', data.completed_sessions],
+      ['AI xarajat (USD)', data.ai_total_cost_usd],
+    ];
+    cards.innerHTML = '';
+    items.forEach(([l,v])=>{
+      const c = document.createElement('div'); c.className='card';
+      c.innerHTML = '<div class="v">'+esc(v ?? '—')+'</div><div class="l">'+esc(l)+'</div>';
+      cards.appendChild(c);
+    });
+  }
+  load();
+}
+
+/* ============================================================
+   USERS (readonly: view + delete)
+   ============================================================ */
+async function renderUsers(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">Foydalanuvchilar</h2><p class="pageDesc">/web/user — mobil ilova foydalanuvchilari (faqat ko\'rish/o\'chirish)</p>';
+
+  const toolbar = document.createElement('div'); toolbar.className='toolbar';
+  const nameI = document.createElement('input'); nameI.placeholder='Ism';
+  const emailI = document.createElement('input'); emailI.placeholder='Email';
+  const phoneI = document.createElement('input'); phoneI.placeholder='Telefon';
+  [['Ism',nameI],['Email',emailI],['Telefon',phoneI]].forEach(([lb,el])=>{
+    const f=document.createElement('div'); f.className='field';
+    const l=document.createElement('label'); l.textContent=lb; f.appendChild(l); f.appendChild(el);
+    toolbar.appendChild(f);
+  });
+  let page=1, limit=10;
+  const searchBtn=document.createElement('button'); searchBtn.textContent='🔍 Qidirish';
+  searchBtn.onclick=()=>{page=1;load();};
+  toolbar.appendChild(searchBtn);
+  main.appendChild(toolbar);
+
+  const tableWrap = document.createElement('div'); main.appendChild(tableWrap);
+  const pager = document.createElement('div'); pager.className='pager'; main.appendChild(pager);
+
+  async function load(){
+    tableWrap.innerHTML='<p class="muted">Yuklanmoqda...</p>';
+    let json;
+    try{
+      json = await api('/web/user', {query:{name:nameI.value, email:emailI.value, phone_number:phoneI.value, limit, page}});
+    }catch(e){ tableWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+    const {items, count} = extractList(json);
+    if(!items.length){ tableWrap.innerHTML='<p class="muted">Topilmadi</p>'; }
+    else {
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th>ID</th><th>Ism</th><th>Telefon</th><th>Email</th><th>Level</th><th>XP</th><th>Coins</th><th>Ro\'yxatdan o\'tgan</th><th>Amallar</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      items.forEach(u=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>'+fmtCell(u.id)+'</td><td>'+fmtCell(u.name)+'</td><td>'+fmtCell(u.phone_number)+'</td><td>'+fmtCell(u.email)+'</td><td>'+fmtCell(u.level)+'</td><td>'+fmtCell(u.xp)+'</td><td>'+fmtCell(u.coins)+'</td><td>'+fmtCell(u.created_at)+'</td>';
+        const td = document.createElement('td'); const actions=document.createElement('div'); actions.className='actions';
+        const vb=document.createElement('button'); vb.className='sm'; vb.textContent='👁 Ko\'rish';
+        vb.onclick=async()=>{
+          try{
+            const full = await api('/web/user/'+u.id);
+            openModal({title:'Foydalanuvchi: '+u.id, fields:[{name:'_',label:'Ma\'lumot',type:'textarea',rows:14,full:true}], values:{_:JSON.stringify(full,null,2)}, onSubmit: async()=>{}});
+          }catch(e){}
+        };
+        const db=document.createElement('button'); db.className='sm danger'; db.textContent='🗑 O\'chirish';
+        db.onclick=async()=>{
+          if(!confirmDialog('Foydalanuvchi o\'chirilsinmi? '+u.id)) return;
+          try{ await api('/web/user/'+u.id+'/delete',{method:'DELETE'}); toast('O\'chirildi','ok'); load(); }catch(e){}
+        };
+        actions.appendChild(vb); actions.appendChild(db); td.appendChild(actions); tr.appendChild(td);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      tableWrap.innerHTML=''; tableWrap.appendChild(table);
+    }
+    pager.innerHTML='';
+    const totalPages = Math.max(1, Math.ceil((count||items.length)/limit));
+    const info=document.createElement('span'); info.textContent='Sahifa '+page+' / '+totalPages+' — jami: '+(count??items.length);
+    const prev=document.createElement('button'); prev.className='sm'; prev.textContent='← Oldingi'; prev.disabled=page<=1; prev.onclick=()=>{page--;load();};
+    const next=document.createElement('button'); next.className='sm'; next.textContent='Keyingi →'; next.disabled=page>=totalPages; next.onclick=()=>{page++;load();};
+    pager.appendChild(prev); pager.appendChild(info); pager.appendChild(next);
+  }
+  load();
+}
+
+/* ============================================================
+   ORDERS (readonly)
+   ============================================================ */
+async function renderOrders(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">Buyurtmalar (Obunalar)</h2><p class="pageDesc">/web/order — faqat ko\'rish</p>';
+  const toolbar = document.createElement('div'); toolbar.className='toolbar';
+  const statusSel = document.createElement('select');
+  [['','— barchasi —'],['NEW','NEW'],['PAID','PAID'],['CANCELLED','CANCELLED'],['RESERVED','RESERVED'],['EXPIRED','EXPIRED']].forEach(([v,l])=>{
+    const o=document.createElement('option'); o.value=v; o.textContent=l; statusSel.appendChild(o);
+  });
+  const userI = document.createElement('input'); userI.placeholder='User ID';
+  [['Status',statusSel],['User ID',userI]].forEach(([lb,el])=>{
+    const f=document.createElement('div'); f.className='field'; const l=document.createElement('label'); l.textContent=lb;
+    f.appendChild(l); f.appendChild(el); toolbar.appendChild(f);
+  });
+  let page=1, limit=10;
+  const searchBtn=document.createElement('button'); searchBtn.textContent='🔍 Qidirish'; searchBtn.onclick=()=>{page=1;load();};
+  toolbar.appendChild(searchBtn);
+  main.appendChild(toolbar);
+  const tableWrap=document.createElement('div'); main.appendChild(tableWrap);
+  const pager=document.createElement('div'); pager.className='pager'; main.appendChild(pager);
+
+  async function load(){
+    tableWrap.innerHTML='<p class="muted">Yuklanmoqda...</p>';
+    let json;
+    try{ json = await api('/web/order', {query:{status:statusSel.value, user_id:userI.value, limit, page}}); }
+    catch(e){ tableWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+    const {items,count} = extractList(json);
+    if(!items.length){ tableWrap.innerHTML='<p class="muted">Topilmadi</p>'; }
+    else{
+      const table=document.createElement('table');
+      table.innerHTML='<thead><tr><th>ID</th><th>Foydalanuvchi</th><th>Tarif</th><th>Summa</th><th>Tanga</th><th>Turi</th><th>Status</th><th>Yaratildi</th><th>To\'landi</th></tr></thead>';
+      const tbody=document.createElement('tbody');
+      items.forEach(o=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML = '<td>'+fmtCell(o.id)+'</td><td>'+fmtCell(o.user_name||o.user_id)+'<br><span class="muted">'+fmtCell(o.user_phone)+'</span></td><td>'+fmtCell(o.tariff_name)+'</td><td>'+fmtCell(o.amount)+'</td><td>'+fmtCell(o.coins_used)+'</td><td>'+fmtCell(o.payment_type)+'</td><td><span class="pill">'+fmtCell(o.status)+'</span></td><td>'+fmtCell(o.created_at)+'</td><td>'+fmtCell(o.paid_at)+'</td>';
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); tableWrap.innerHTML=''; tableWrap.appendChild(table);
+    }
+    pager.innerHTML='';
+    const totalPages = Math.max(1, Math.ceil((count||items.length)/limit));
+    const info=document.createElement('span'); info.textContent='Sahifa '+page+' / '+totalPages+' — jami: '+(count??items.length);
+    const prev=document.createElement('button'); prev.className='sm'; prev.textContent='← Oldingi'; prev.disabled=page<=1; prev.onclick=()=>{page--;load();};
+    const next=document.createElement('button'); next.className='sm'; next.textContent='Keyingi →'; next.disabled=page>=totalPages; next.onclick=()=>{page++;load();};
+    pager.appendChild(prev); pager.appendChild(info); pager.appendChild(next);
+  }
+  load();
+}
+
+async function renderCoinMonitoring(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">Tangalar savdosi monitoringi</h2><p class="pageDesc">/web/coin-transaction — faqat ko\'rish</p>';
+
+  const cards = document.createElement('div'); cards.className='cards'; main.appendChild(cards);
+  (async ()=>{
+    let s;
+    try{ s = await api('/web/coin-transaction/summary'); }catch(e){ return; }
+    const items = [
+      ['Sotib olingan (pul evaziga)', s.total_purchased],
+      ['Ishlab topilgan (referral/promo/simulyatsiya)', s.total_earned],
+      ['Sarflangan (case ochish va h.k.)', s.total_spent],
+      ['Aylanmada (hozirgi jami balans)', s.coins_in_circulation],
+    ];
+    cards.innerHTML = '';
+    items.forEach(([l,v])=>{
+      const c = document.createElement('div'); c.className='card';
+      c.innerHTML = '<div class="v">🪙 '+esc(v ?? 0)+'</div><div class="l">'+esc(l)+'</div>';
+      cards.appendChild(c);
+    });
+  })();
+
+  const toolbar = document.createElement('div'); toolbar.className='toolbar';
+  const reasonSel = document.createElement('select');
+  [['','— barcha sabablar —'],['coin_purchase','Tanga sotib olish'],['category_unlock','Bo\'lim ochish'],['referral_reward','Referral'],['promo_redeem','Promokod'],['simulation_finish','Simulyatsiya']].forEach(([v,l])=>{
+    const o=document.createElement('option'); o.value=v; o.textContent=l; reasonSel.appendChild(o);
+  });
+  const userI = document.createElement('input'); userI.placeholder='User ID';
+  [['Sabab',reasonSel],['User ID',userI]].forEach(([lb,el])=>{
+    const f=document.createElement('div'); f.className='field'; const l=document.createElement('label'); l.textContent=lb;
+    f.appendChild(l); f.appendChild(el); toolbar.appendChild(f);
+  });
+  let page=1, limit=20;
+  const searchBtn=document.createElement('button'); searchBtn.textContent='🔍 Qidirish'; searchBtn.onclick=()=>{page=1;load();};
+  toolbar.appendChild(searchBtn);
+  main.appendChild(toolbar);
+  const tableWrap=document.createElement('div'); main.appendChild(tableWrap);
+  const pager=document.createElement('div'); pager.className='pager'; main.appendChild(pager);
+
+  async function load(){
+    tableWrap.innerHTML='<p class="muted">Yuklanmoqda...</p>';
+    let json;
+    try{ json = await api('/web/coin-transaction', {query:{reason:reasonSel.value, user_id:userI.value, limit, page}}); }
+    catch(e){ tableWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+    const {items,count} = extractList(json);
+    if(!items.length){ tableWrap.innerHTML='<p class="muted">Topilmadi</p>'; }
+    else{
+      const table=document.createElement('table');
+      table.innerHTML='<thead><tr><th>Foydalanuvchi</th><th>O\'zgarish</th><th>Sabab</th><th>Manba</th><th>Vaqt</th></tr></thead>';
+      const tbody=document.createElement('tbody');
+      items.forEach(t=>{
+        const tr=document.createElement('tr');
+        const delta = t.delta>0 ? '<span style="color:#4ade80">+'+esc(t.delta)+'</span>' : '<span style="color:#f87171">'+esc(t.delta)+'</span>';
+        tr.innerHTML = '<td>'+fmtCell(t.user_name||t.user_id)+'</td><td>'+delta+'</td><td><span class="pill">'+fmtCell(t.reason)+'</span></td><td>'+fmtCell(t.reference_type)+' '+fmtCell(t.reference_id)+'</td><td>'+fmtCell(t.created_at)+'</td>';
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); tableWrap.innerHTML=''; tableWrap.appendChild(table);
+    }
+    pager.innerHTML='';
+    const totalPages = Math.max(1, Math.ceil((count||items.length)/limit));
+    const info=document.createElement('span'); info.textContent='Sahifa '+page+' / '+totalPages+' — jami: '+(count??items.length);
+    const prev=document.createElement('button'); prev.className='sm'; prev.textContent='← Oldingi'; prev.disabled=page<=1; prev.onclick=()=>{page--;load();};
+    const next=document.createElement('button'); next.className='sm'; next.textContent='Keyingi →'; next.disabled=page>=totalPages; next.onclick=()=>{page++;load();};
+    pager.appendChild(prev); pager.appendChild(info); pager.appendChild(next);
+  }
+  load();
+}
+
+/* ============================================================
+   APP ROUTE (singleton-ish list, update only)
+   ============================================================ */
+async function renderAppRoute(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">App Route (ilova sozlamalari)</h2><p class="pageDesc">/web/app-route — call-center, versiyalar, do\'kon havolalari</p>';
+
+  const APP_ROUTE_FIELDS = [
+    {name:'call_center', label:'Call-center', type:'text'},
+    {name:'support_url', label:'Support URL', type:'text'},
+    {name:'app_version.android', label:'Android versiya', type:'text'},
+    {name:'app_version.ios', label:'iOS versiya', type:'text'},
+    {name:'app_links.google', label:'Google Play havola', type:'text'},
+    {name:'app_links.apple', label:'App Store havola', type:'text'},
+    {name:'payment_min_version', label:'To\'lov uchun min versiya', type:'text'},
+    {name:'buy_course', label:'Kurs sotib olish yoqilgan', type:'checkbox'},
+  ];
+
+  const toolbar = document.createElement('div'); toolbar.className='toolbar';
+  const addBtn = document.createElement('button'); addBtn.className='primary'; addBtn.textContent='➕ Yangi qo\'shish';
+  addBtn.onclick = ()=>{
+    openModal({
+      title:'App Route qo\'shish',
+      fields: APP_ROUTE_FIELDS,
+      values:{},
+      onSubmit: async(body)=>{
+        await api('/web/app-route', {method:'POST', body});
+        toast('Yaratildi','ok'); load();
+      }
+    });
+  };
+  toolbar.appendChild(addBtn); main.appendChild(toolbar);
+
+  const tableWrap = document.createElement('div'); main.appendChild(tableWrap);
+
+  async function load(){
+    tableWrap.innerHTML = '<p class="muted">Yuklanmoqda...</p>';
+    let json;
+    try{ json = await api('/web/app-route'); }catch(e){ tableWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+    const {items} = extractList(json);
+    if(!items.length){ tableWrap.innerHTML = '<p class="muted">Ma\'lumot topilmadi — yuqoridagi "Yangi qo\'shish" orqali birinchi sozlamani kiriting.</p>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>ID</th><th>Call-center</th><th>Support URL</th><th>Versiya (android/ios)</th><th>Buy course</th><th>Amallar</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    items.forEach(row=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+fmtCell(row.id)+'</td><td>'+fmtCell(row.call_center)+'</td><td>'+fmtCell(row.support_url)+'</td><td>'+fmtCell((row.app_version&&row.app_version.android)||'')+' / '+fmtCell((row.app_version&&row.app_version.ios)||'')+'</td><td>'+fmtCell(row.buy_course)+'</td>';
+      const td = document.createElement('td');
+      const eb = document.createElement('button'); eb.className='sm'; eb.textContent='✏️ Tahrir';
+      eb.onclick = ()=>{
+        openModal({
+          title:'App Route tahrirlash',
+          fields: APP_ROUTE_FIELDS,
+          values: row,
+          onSubmit: async(body)=>{
+            await api('/web/app-route/'+row.id+'/update', {method:'PUT', body});
+            toast('Saqlandi','ok'); load();
+          }
+        });
+      };
+      const db = document.createElement('button'); db.className='sm danger'; db.textContent='🗑';
+      db.onclick = async ()=>{
+        if(!confirm('O\'chirilsinmi?')) return;
+        await api('/web/app-route/'+row.id+'/delete', {method:'DELETE'});
+        toast('O\'chirildi','ok'); load();
+      };
+      td.appendChild(eb); td.appendChild(db); tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody); tableWrap.innerHTML=''; tableWrap.appendChild(table);
+  }
+  load();
+}
+
+/* ============================================================
+   AI PROMPT
+   ============================================================ */
+async function renderAIPrompt(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">AI Promptlar</h2><p class="pageDesc">/web/ai-prompt — bemor personaji / debrief / case generatsiya promptlari</p>';
+
+  const usageBox = document.createElement('div'); usageBox.className='cards';
+  main.appendChild(usageBox);
+  try{
+    const usage = await api('/web/ai-prompt/usage');
+    usageBox.innerHTML = '<div class="card"><div class="v">'+esc(usage.total_tokens ?? 0)+'</div><div class="l">Jami tokenlar</div></div>'+
+      '<div class="card"><div class="v">$'+esc(usage.total_cost_usd ?? 0)+'</div><div class="l">Jami xarajat (USD)</div></div>';
+  }catch(e){}
+
+  const addBtn = document.createElement('button'); addBtn.className='primary'; addBtn.textContent='+ Prompt qo\'shish / yangilash';
+  addBtn.onclick = ()=>openForm({});
+  main.appendChild(addBtn);
+  const tableWrap = document.createElement('div'); tableWrap.style.marginTop='12px'; main.appendChild(tableWrap);
+
+  function openForm(values){
+    openModal({
+      title:'AI Prompt saqlash',
+      fields:[
+        {name:'key', label:'Key', type:'select', options:[
+          {value:'patient_persona', label:'patient_persona'},
+          {value:'debrief', label:'debrief'},
+          {value:'case_generation', label:'case_generation'},
+        ]},
+        {name:'template', label:'Template', type:'textarea', rows:8, full:true},
+        {name:'model_params', label:'Model parametrlari (JSON)', type:'json', full:true, jsonDefault:{}},
+      ],
+      values,
+      onSubmit: async(body)=>{
+        await api('/web/ai-prompt', {method:'PUT', body});
+        toast('Saqlandi','ok'); load();
+      }
+    });
+  }
+
+  async function load(){
+    tableWrap.innerHTML = '<p class="muted">Yuklanmoqda...</p>';
+    let items;
+    try{ items = await api('/web/ai-prompt'); }catch(e){ tableWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+    items = Array.isArray(items) ? items : [];
+    if(!items.length){ tableWrap.innerHTML='<p class="muted">Hali prompt kiritilmagan.</p>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>Key</th><th>Template</th><th>Model params</th><th>Yangilangan</th><th>Amallar</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    items.forEach(p=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+fmtCell(p.key)+'</td><td>'+fmtCell(p.template)+'</td><td>'+fmtCell(p.model_params)+'</td><td>'+fmtCell(p.updated_at)+'</td>';
+      const td=document.createElement('td');
+      const eb=document.createElement('button'); eb.className='sm'; eb.textContent='✏️ Tahrir';
+      eb.onclick=()=>openForm(p);
+      td.appendChild(eb); tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody); tableWrap.innerHTML=''; tableWrap.appendChild(table);
+  }
+  load();
+}
+
+/* ============================================================
+   SETTINGS
+   ============================================================ */
+async function renderSettings(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">Tizim sozlamalari</h2><p class="pageDesc">/web/setting — key/value (value JSON string sifatida)</p>';
+
+  // --- Mukofot sozlamalari: bazaviy XP/Coin endi "Levellar" sahifasida (har bir
+  // foydalanuvchi darajasi - Level 1/2/3... - o'zining xp_reward/coin_reward'iga
+  // ega). Bu yerda faqat case qiyinlik darajasi (easy/medium/hard) koeffitsienti -
+  // "medium"/"hard" case'lar bazaviy mukofotni necha barobar ko'paytirishi.
+  // Yakuniy qiymat bundan tashqari health_percent'ga (sog'liq %, ya'ni qanchalik
+  // to'g'ri/qobiliyatli yechilgani) nisbatan mutanosib beriladi - 0 ta klinik
+  // harakat qilingan bo'lsa mukofot 0 (SimulationService.Finish). ---
+  const rewardCard = document.createElement('div'); rewardCard.className='card'; rewardCard.style.marginBottom='16px';
+  rewardCard.innerHTML = '<div class="v" style="font-size:16px;margin-bottom:4px">🏆 Mukofot sozlamalari (case qiyinlik koeffitsienti)</div>'+
+    '<div class="l" style="margin-bottom:10px">Bazaviy XP/Coin foydalanuvchining darajasiga qarab beriladi (tahrirlash: '+
+    '<b>"Levellar"</b> sahifasi). Bu yerda faqat "O\'rta"/"Qiyin" case\'lar bazaviy mukofotni necha barobar oshirishi belgilanadi '+
+    '("Oson" har doim 1x). Yakuniy qiymat sog\'liq foiziga (qobiliyat/to\'g\'ri bajarish darajasiga) mutanosib beriladi.</div>';
+  const rewardGrid = document.createElement('div');
+  rewardGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 16px';
+  const rewardInputs = {};
+  [
+    ['medium_multiplier','🟡 O\'rta - necha barobar (x)', 0.1, 0.1],
+    ['hard_multiplier','🔴 Qiyin - necha barobar (x)', 0.1, 0.1],
+  ].forEach(([key,label,min,step])=>{
+    const f = document.createElement('div'); f.className='field';
+    const l = document.createElement('label'); l.textContent=label;
+    const inp = document.createElement('input'); inp.type='number'; inp.min=String(min); inp.step=String(step);
+    rewardInputs[key]=inp;
+    f.appendChild(l); f.appendChild(inp); rewardGrid.appendChild(f);
+  });
+  rewardCard.appendChild(rewardGrid);
+  const rewardSaveBtn = document.createElement('button'); rewardSaveBtn.className='primary'; rewardSaveBtn.style.marginTop='10px';
+  rewardSaveBtn.textContent = '💾 Koeffitsientlarni saqlash';
+  rewardSaveBtn.onclick = async()=>{
+    const body = {
+      medium_multiplier: Number(rewardInputs.medium_multiplier.value||1),
+      hard_multiplier: Number(rewardInputs.hard_multiplier.value||1),
+    };
+    try{
+      await api('/web/setting/difficulty-reward', {method:'PUT', body});
+      toast('Mukofot sozlamalari saqlandi','ok');
+    }catch(e){}
+  };
+  rewardCard.appendChild(rewardSaveBtn);
+  main.appendChild(rewardCard);
+  (async()=>{
+    try{
+      const r = await api('/web/setting/difficulty-reward');
+      if(r){
+        rewardInputs.medium_multiplier.value = r.medium_multiplier;
+        rewardInputs.hard_multiplier.value = r.hard_multiplier;
+      }
+    }catch(e){}
+  })();
+
+  const addBtn = document.createElement('button'); addBtn.className='primary'; addBtn.textContent='+ Sozlama qo\'shish/yangilash';
+  addBtn.onclick = ()=>openForm({key:'daily_free_limit', value:''});
+  main.appendChild(addBtn);
+  const tableWrap = document.createElement('div'); tableWrap.style.marginTop='12px'; main.appendChild(tableWrap);
+
+  function openForm(values){
+    openModal({
+      title:'Sozlama saqlash',
+      fields:[
+        {name:'key', label:'Key', type:'text', required:true},
+        {name:'value', label:'Value (JSON string, masalan: 3)', type:'textarea', rows:3, full:true},
+      ],
+      values,
+      onSubmit: async(body)=>{
+        await api('/web/setting', {method:'PUT', body});
+        toast('Saqlandi','ok'); load();
+      }
+    });
+  }
+
+  async function load(){
+    tableWrap.innerHTML='<p class="muted">Yuklanmoqda...</p>';
+    let items;
+    try{ items = await api('/web/setting'); }catch(e){ tableWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+    items = Array.isArray(items) ? items : [];
+    if(!items.length){ tableWrap.innerHTML='<p class="muted">Sozlama topilmadi.</p>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML='<thead><tr><th>Key</th><th>Value</th><th>Yangilangan</th><th>Amallar</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    items.forEach(s=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td>'+fmtCell(s.key)+'</td><td>'+fmtCell(s.value)+'</td><td>'+fmtCell(s.updated_at)+'</td>';
+      const td=document.createElement('td');
+      const eb=document.createElement('button'); eb.className='sm'; eb.textContent='✏️ Tahrir';
+      eb.onclick=()=>openForm(s);
+      td.appendChild(eb); tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody); tableWrap.innerHTML=''; tableWrap.appendChild(table);
+  }
+  load();
+}
+
+/* ============================================================
+   CUSTOM PERMISSION — modules tree + role accesses matrix
+   ============================================================ */
+async function renderCustomPermission(mode){ // mode: 'modules' | 'accesses'
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  const h = document.createElement('h2'); h.className='pageTitle';
+  h.textContent = mode === 'modules' ? 'Admin panel modullari' : 'Rol ruxsatlari (Accesses)';
+  main.appendChild(h);
+  const desc = document.createElement('p'); desc.className='pageDesc';
+  desc.textContent = mode === 'modules' ? '/web/custom-permission — daraxt tuzilmali modullar' : '/web/custom-permission/accesses — rol bo\'yicha CRUD ruxsatlar';
+  main.appendChild(desc);
+
+  let roleId = '';
+  if(mode === 'accesses'){
+    const roleBar = document.createElement('div'); roleBar.className='toolbar';
+    const f = document.createElement('div'); f.className='field';
+    const l = document.createElement('label'); l.textContent='Rol';
+    const sel = document.createElement('select');
+    const roles = await loadRefOptions('role');
+    if(!roles.length){ const o=document.createElement('option'); o.textContent='(rollar topilmadi)'; sel.appendChild(o); }
+    roles.forEach(r=>{ const o=document.createElement('option'); o.value=r.value; o.textContent=r.label; sel.appendChild(o); });
+    f.appendChild(l); f.appendChild(sel);
+    roleBar.appendChild(f);
+    main.appendChild(roleBar);
+    roleId = sel.value;
+    sel.onchange = ()=>{ roleId = sel.value; stack.length=0; stack.push({id:'', title:'Root'}); renderLevel(); };
+  }
+
+  const crumbBar = document.createElement('div'); crumbBar.className='breadcrumb'; main.appendChild(crumbBar);
+  if(mode === 'modules'){
+    const addBtn = document.createElement('button'); addBtn.className='primary'; addBtn.textContent='+ Modul qo\'shish';
+    addBtn.style.marginBottom='10px';
+    addBtn.onclick = ()=>{
+      openModal({
+        title:'Yangi modul',
+        fields:[
+          {name:'title', label:'Nomi', type:'text', required:true},
+          {name:'attributes', label:'Atributlar (JSON, masalan icon/route)', type:'json', jsonDefault:{}},
+          {name:'order_num', label:'Tartib raqami', type:'number'},
+        ],
+        values:{parent_id: stack[stack.length-1].id},
+        onSubmit: async(body)=>{
+          body.parent_id = stack[stack.length-1].id;
+          await api('/web/custom-permission', {method:'POST', body});
+          toast('Modul yaratildi','ok'); renderLevel();
+        }
+      });
+    };
+    main.appendChild(addBtn);
+  }
+  const listWrap = document.createElement('div'); main.appendChild(listWrap);
+
+  const stack = [{id:'', title:'Root'}];
+
+  function renderCrumbs(){
+    crumbBar.innerHTML = '';
+    stack.forEach((s,i)=>{
+      if(i>0){ const sep=document.createElement('span'); sep.textContent='›'; crumbBar.appendChild(sep); }
+      const b = document.createElement('button');
+      b.textContent = s.title;
+      b.onclick = ()=>{ stack.length = i+1; renderLevel(); };
+      crumbBar.appendChild(b);
+    });
+  }
+
+  async function renderLevel(){
+    renderCrumbs();
+    const parent = stack[stack.length-1];
+    listWrap.innerHTML = '<p class="muted">Yuklanmoqda...</p>';
+
+    if(mode === 'modules'){
+      let json;
+      try{
+        json = parent.id ? await api('/web/custom-permission/'+parent.id+'/children') : await api('/web/custom-permission');
+      }catch(e){ listWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+      const {items} = extractList(json);
+      if(!items.length){ listWrap.innerHTML='<p class="muted">Modul topilmadi.</p>'; return; }
+      const table = document.createElement('table');
+      table.innerHTML='<thead><tr><th>Nomi</th><th>Tartib</th><th>Atributlar</th><th>Amallar</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      items.forEach(m=>{
+        const tr = document.createElement('tr');
+        const tdT = document.createElement('td'); tdT.textContent = m.title; tr.appendChild(tdT);
+        const tdO = document.createElement('td'); tdO.textContent = m.order_num ?? ''; tr.appendChild(tdO);
+        const tdA = document.createElement('td'); tdA.innerHTML = fmtCell(m.attributes); tr.appendChild(tdA);
+        const tdAct = document.createElement('td'); const actions=document.createElement('div'); actions.className='actions';
+        const openB = document.createElement('button'); openB.className='sm'; openB.textContent='📂 Ichiga kirish';
+        openB.onclick = ()=>{ stack.push({id:m.id, title:m.title}); renderLevel(); };
+        const editB = document.createElement('button'); editB.className='sm'; editB.textContent='✏️';
+        editB.onclick = ()=>{
+          openModal({
+            title:'Modulni tahrirlash',
+            fields:[
+              {name:'title', label:'Nomi', type:'text', required:true},
+              {name:'attributes', label:'Atributlar (JSON)', type:'json', jsonDefault:{}},
+              {name:'order_num', label:'Tartib raqami', type:'number'},
+            ],
+            values: m,
+            onSubmit: async(body)=>{ await api('/web/custom-permission/'+m.id+'/update', {method:'PUT', body}); toast('Saqlandi','ok'); renderLevel(); }
+          });
+        };
+        const delB = document.createElement('button'); delB.className='sm danger'; delB.textContent='🗑';
+        delB.onclick = async ()=>{ if(!confirmDialog('O\'chirilsinmi?')) return; try{ await api('/web/custom-permission/'+m.id+'/delete',{method:'DELETE'}); toast('O\'chirildi','ok'); renderLevel(); }catch(e){} };
+        actions.appendChild(openB); actions.appendChild(editB); actions.appendChild(delB);
+        tdAct.appendChild(actions); tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); listWrap.innerHTML=''; listWrap.appendChild(table);
+    } else {
+      if(!roleId){ listWrap.innerHTML = '<p class="muted">Avval rol tanlang (yoki tizimda rol mavjud emas).</p>'; return; }
+      let json;
+      try{ json = await api('/web/custom-permission/accesses', {query:{role_id:roleId, parent_id:parent.id}}); }
+      catch(e){ listWrap.innerHTML='<p class="muted">Xatolik</p>'; return; }
+      const items = (json && json.items) || [];
+      if(!items.length){ listWrap.innerHTML='<p class="muted">Modul topilmadi.</p>'; return; }
+      const table = document.createElement('table');
+      table.innerHTML='<thead><tr><th>Modul</th><th>Read</th><th>Write</th><th>Update</th><th>Delete</th><th></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      items.forEach(it=>{
+        const tr = document.createElement('tr');
+        const tdT = document.createElement('td');
+        tdT.textContent = it.title;
+        tr.appendChild(tdT);
+        const state = {read:it.read, write:it.write, update:it.update, delete:it.delete};
+        ['read','write','update','delete'].forEach(perm=>{
+          const td = document.createElement('td');
+          const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = !!state[perm];
+          cb.onchange = async ()=>{
+            state[perm] = cb.checked;
+            try{
+              await api('/web/custom-permission/accesses', {method:'PUT', body:{
+                role_id: roleId, custom_permission_id: it.custom_permission_id,
+                read: state.read, write: state.write, update: state.update, delete: state.delete,
+              }});
+              toast('Ruxsat yangilandi','ok');
+            }catch(e){ cb.checked = !cb.checked; state[perm] = cb.checked; }
+          };
+          td.appendChild(cb); tr.appendChild(td);
+        });
+        const tdOpen = document.createElement('td');
+        if(it.has_children){
+          const openB = document.createElement('button'); openB.className='sm'; openB.textContent='📂';
+          openB.onclick = ()=>{ stack.push({id:it.custom_permission_id, title:it.title}); renderLevel(); };
+          tdOpen.appendChild(openB);
+        }
+        tr.appendChild(tdOpen);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); listWrap.innerHTML=''; listWrap.appendChild(table);
+    }
+  }
+  renderLevel();
+}
+
+/* ============================================================
+   ADMIN PROFILE (o'zim: ma'lumot + parol almashtirish)
+   ============================================================ */
+async function renderAdminProfile(){
+  const main = document.getElementById('main');
+  main.innerHTML = '<h2 class="pageTitle">Mening profilim</h2><p class="pageDesc">/web/admin/profile</p>';
+
+  const kvBox = document.createElement('div'); kvBox.className='kv card';
+  kvBox.style.maxWidth='420px';
+  main.appendChild(kvBox);
+
+  let me = null;
+  try{ me = await api('/web/admin/profile'); }catch(e){}
+  if(me){
+    kvBox.innerHTML =
+      '<div><span class="k">ID</span>'+esc(me.id)+'</div>'+
+      '<div><span class="k">Login</span>'+esc(me.login)+'</div>'+
+      '<div><span class="k">Rol</span>'+esc(me.role_name || '—')+'</div>'+
+      '<div><span class="k">Yaratilgan</span>'+esc(me.created_at || '—')+'</div>'+
+      '<div><span class="k">Yangilangan</span>'+esc(me.updated_at || '—')+'</div>';
+  } else {
+    kvBox.innerHTML = '<p class="muted">Profil topilmadi.</p>';
+  }
+
+  const pwBtn = document.createElement('button');
+  pwBtn.className = 'primary'; pwBtn.style.marginTop='14px';
+  pwBtn.textContent = '🔑 Parolni almashtirish';
+  pwBtn.onclick = ()=>{
+    openModal({
+      title: 'Parolni almashtirish',
+      fields:[
+        {name:'old_password', label:'Joriy parol', type:'password', full:true, required:true},
+        {name:'new_password', label:'Yangi parol', type:'password', full:true, required:true},
+        {name:'confirm_password', label:'Yangi parol (tasdiq)', type:'password', full:true, required:true},
+      ],
+      values:{},
+      onSubmit: async (body)=>{
+        if(!body.old_password || !body.new_password){
+          toast('Barcha maydonlarni to\'ldiring', 'err'); throw new Error('validation');
+        }
+        if(body.new_password !== body.confirm_password){
+          toast('Yangi parol va tasdiq mos emas', 'err'); throw new Error('validation');
+        }
+        await api('/web/auth/password/change', {method:'PUT', body});
+        toast('Parol muvaffaqiyatli almashtirildi', 'ok');
+      }
+    });
+  };
+  main.appendChild(pwBtn);
+}
+
+/* ============================================================
+   SIDEBAR / NAV / SHELL
+   ============================================================ */
+const NAV = [
+  {group:'Umumiy', items:[
+    {key:'dashboard', label:'📊 Dashboard', render: renderDashboard},
+  ]},
+  {group:'Kontent', items:[
+    {key:'banner', label:'🖼 Bannerlar', render: ()=>renderGenericModule('banner')},
+    {key:'about', label:'ℹ️ Biz haqimizda', render: ()=>renderGenericModule('about')},
+    {key:'faq', label:'❓ FAQ', render: ()=>renderGenericModule('faq')},
+    {key:'contact', label:'☎️ Kontaktlar', render: ()=>renderGenericModule('contact')},
+    {key:'partner', label:'🤝 Hamkorlar', render: ()=>renderGenericModule('partner')},
+    {key:'app_route', label:'🔗 App Route', render: renderAppRoute},
+  ]},
+  {group:'Ta\'lim kontenti', items:[
+    {key:'category', label:'📁 Bo\'limlar', render: ()=>renderGenericModule('category')},
+    {key:'topic', label:'📑 Mavzular', render: ()=>renderGenericModule('topic')},
+    {key:'case', label:'🧠 Case\'lar', render: ()=>renderGenericModule('case')},
+    {key:'level', label:'🏅 Levellar', render: ()=>renderGenericModule('level')},
+    {key:'ai_prompt', label:'🤖 AI Promptlar', render: renderAIPrompt},
+  ]},
+  {group:'Savdo', items:[
+    {key:'tariff', label:'💳 Tariflar', render: ()=>renderGenericModule('tariff')},
+    {key:'order', label:'🧾 Buyurtmalar', render: renderOrders},
+    {key:'promocode', label:'🎟 Promokodlar', render: ()=>renderGenericModule('promocode')},
+    {key:'coin_monitoring', label:'🪙 Tangalar monitoringi', render: renderCoinMonitoring},
+  ]},
+  {group:'Foydalanuvchilar', items:[
+    {key:'user', label:'👤 Foydalanuvchilar', render: renderUsers},
+    {key:'notification', label:'🔔 Bildirishnomalar', render: ()=>renderGenericModule('notification')},
+  ]},
+  {group:'Boshqaruv', items:[
+    {key:'admin', label:'🧑‍💼 Adminlar', render: ()=>renderGenericModule('admin')},
+    {key:'my_profile', label:'👤 Mening profilim', render: renderAdminProfile},
+    {key:'role', label:'🛡 Rollar', render: ()=>renderGenericModule('role')},
+    {key:'modules', label:'🧩 Panel modullari', render: ()=>renderCustomPermission('modules')},
+    {key:'accesses', label:'🔐 Rol ruxsatlari', render: ()=>renderCustomPermission('accesses')},
+    {key:'setting', label:'⚙️ Sozlamalar', render: renderSettings},
+  ]},
+];
+
+function buildSidebar(){
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = '';
+  NAV.forEach(group=>{
+    const g = document.createElement('div'); g.className='grp'; g.textContent = group.group;
+    sb.appendChild(g);
+    group.items.forEach(item=>{
+      const b = document.createElement('button');
+      b.className = 'nav'; b.textContent = item.label;
+      b.dataset.key = item.key;
+      b.onclick = ()=>selectTab(item.key);
+      sb.appendChild(b);
+    });
+  });
+}
+
+function selectTab(key){
+  state.currentTab = key;
+  document.querySelectorAll('#sidebar button.nav').forEach(b=>b.classList.toggle('active', b.dataset.key===key));
+  for(const group of NAV){
+    const found = group.items.find(i=>i.key===key);
+    if(found){ found.render(); return; }
+  }
+}
+
+function startApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').classList.add('show');
+  document.getElementById('whoami').textContent = 'Rol: ' + (state.role || '—') + ' · ID: ' + (state.uid || '—');
+  document.getElementById('baseUrlShow').textContent = state.baseUrl;
+  buildSidebar();
+  selectTab('dashboard');
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+(function boot(){
+  document.getElementById('baseUrlInput').value = state.baseUrl;
+  if(state.access){
+    startApp();
+  }
+  document.getElementById('passInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+})();
+</script>
+</body>
+</html>

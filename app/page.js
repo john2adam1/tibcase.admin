@@ -11,6 +11,13 @@ export default function AdminApp() {
   const [uid, setUid] = useState('');
   const [currentTab, setCurrentTab] = useState('dashboard');
 
+  // Tokenlar ref'larda ham saqlanadi: api() uzoq yashovchi closure'larda ham (va refresh'dan
+  // keyingi qayta urinishda) har doim eng yangi tokenni ishlatishi uchun (admin-panel.html'dagi
+  // o'zgaruvchan `state` obyektiga mos).
+  const accessRef = useRef('');
+  const refreshRef = useRef('');
+  const refreshInFlight = useRef(null);
+
   // Login form state
   const [loginInput, setLoginInput] = useState('medicai');
   const [passwordInput, setPasswordInput] = useState('1234');
@@ -25,7 +32,7 @@ export default function AdminApp() {
     setToasts(prev => [...prev, { id, msg, kind }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, kind === 'err' ? 7000 : 4000);
+    }, kind === 'err' ? 9000 : 4500);
   };
 
   useEffect(() => {
@@ -35,12 +42,45 @@ export default function AdminApp() {
     const savedUid = localStorage.getItem('ts_uid');
 
     if (savedToken) {
+      accessRef.current = savedToken;
+      refreshRef.current = savedRefresh || '';
       setToken(savedToken);
       setRefreshToken(savedRefresh || '');
       setRole(savedRole || 'Admin');
       setUid(savedUid || '');
     }
   }, []);
+
+  // Parallel so'rovlar bir vaqtda 401 olsa ham refresh faqat bir marta chaqiriladi
+  const doRefreshToken = async () => {
+    if (!refreshRef.current) return false;
+    if (!refreshInFlight.current) {
+      refreshInFlight.current = (async () => {
+        try {
+          const r = await fetch(`${API_BASE}/auth/token/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshRef.current })
+          });
+          if (!r.ok) return false;
+          const d = await r.json();
+          if (!d?.access_token) return false;
+          accessRef.current = d.access_token;
+          if (d.refresh_token) refreshRef.current = d.refresh_token;
+          setToken(accessRef.current);
+          setRefreshToken(refreshRef.current);
+          localStorage.setItem('ts_access', accessRef.current);
+          localStorage.setItem('ts_refresh', refreshRef.current);
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+    }
+    const ok = await refreshInFlight.current;
+    refreshInFlight.current = null;
+    return ok;
+  };
 
   // Universal API caller with auto-refresh
   const api = async (path, { method = 'GET', body = null, isForm = false, query = null } = {}, retry = true) => {
@@ -56,7 +96,7 @@ export default function AdminApp() {
     const headers = {
       'Accept-Language': 'uz'
     };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (accessRef.current) headers['Authorization'] = `Bearer ${accessRef.current}`;
 
     let fetchBody = undefined;
     if (isForm) {
@@ -74,26 +114,9 @@ export default function AdminApp() {
       throw err;
     }
 
-    if (res.status === 401 && retry && refreshToken && path !== '/auth/token/refresh') {
-      try {
-        const refreshRes = await fetch(`${API_BASE}/auth/token/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken })
-        });
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          if (refreshData?.access_token) {
-            setToken(refreshData.access_token);
-            if (refreshData.refresh_token) setRefreshToken(refreshData.refresh_token);
-            localStorage.setItem('ts_access', refreshData.access_token);
-            if (refreshData.refresh_token) localStorage.setItem('ts_refresh', refreshData.refresh_token);
-            return api(path, { method, body, isForm, query }, false);
-          }
-        }
-      } catch {
-        // Refresh token failed
-      }
+    if (res.status === 401 && retry && refreshRef.current && path !== '/auth/token/refresh') {
+      const ok = await doRefreshToken();
+      if (ok) return api(path, { method, body, isForm, query }, false);
       handleLogout();
       addToast("Sessiya tugagan, qaytadan kiring", "err");
       throw new Error("Session expired");
@@ -112,8 +135,11 @@ export default function AdminApp() {
       if (data && data.error && data.error.message) msg = data.error.message + (data.error.details ? ` — ${data.error.details}` : '');
       else if (data && data.message) msg = data.message;
       else if (typeof data === 'string' && data) msg = data;
+      if (res.status === 401) msg = `Sessiya tugagan yoki token noto'g'ri. Qayta login qiling. (${msg})`;
       addToast(msg, 'err');
-      throw new Error(msg);
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
     }
 
     return data;
@@ -137,6 +163,8 @@ export default function AdminApp() {
         return;
       }
 
+      accessRef.current = data.access_token || '';
+      refreshRef.current = data.refresh_token || '';
       setToken(data.access_token || '');
       setRefreshToken(data.refresh_token || '');
       setRole(data.role || 'Admin');
@@ -160,6 +188,8 @@ export default function AdminApp() {
     localStorage.removeItem('ts_refresh');
     localStorage.removeItem('ts_role');
     localStorage.removeItem('ts_uid');
+    accessRef.current = '';
+    refreshRef.current = '';
     setToken('');
     setRefreshToken('');
     setRole('');
@@ -913,14 +943,26 @@ function GenericPanel({ moduleKey, api, addToast }) {
   const handleModalSubmit = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...formValues };
+      // admin-panel.html'dagi kabi: payload faqat forma maydonlaridan yig'iladi
+      // (id/created_at kabi ortiqcha maydonlar yuborilmaydi) va har bir maydonning
+      // standart qiymati bor (select -> birinchi variant, number -> 0, ml -> {uz,ru,en}).
+      const payload = {};
+      (activeFields || []).forEach(f => {
+        const cur = formValues[f.name];
+        if (f.type === 'ml') {
+          payload[f.name] = { uz: cur?.uz || '', ru: cur?.ru || '', en: cur?.en || '' };
+        } else if (f.type === 'number') {
+          payload[f.name] = cur === undefined || cur === null || cur === '' ? 0 : Number(cur);
+        } else if (f.type === 'select') {
+          const opts = f.options || (f.asyncOptions ? asyncOpts[f.asyncOptions] || [] : []);
+          payload[f.name] = cur !== undefined && cur !== null ? cur : (f.includeEmpty ? '' : (opts[0]?.value ?? ''));
+        } else {
+          payload[f.name] = cur ?? '';
+        }
+      });
       if (cfg.base === '/web/admin' && editItem?.id && !payload.password) {
         delete payload.password;
       }
-      // Bo'sh raqam maydonlarini yubormaymiz (backend integer kutadi)
-      (activeFields || []).forEach(f => {
-        if (f.type === 'number' && payload[f.name] === '') delete payload[f.name];
-      });
       if (editItem?.id) {
         await api(`${cfg.base}/${editItem.id}/update`, { method: 'PUT', body: payload });
         addToast("Saqlandi", "ok");
@@ -1230,6 +1272,7 @@ function CasePanel({ api, addToast }) {
   const [aiGenDiff, setAiGenDiff] = useState('medium');
   const [aiGenComplaint, setAiGenComplaint] = useState('');
   const [aiGenAnswer, setAiGenAnswer] = useState('');
+  const [aiGenErr, setAiGenErr] = useState('');
   const [generating, setGenerating] = useState(false);
 
   // Info modal (for test patient / debrief)
@@ -1306,6 +1349,7 @@ function CasePanel({ api, addToast }) {
   const handleAiGenSubmit = async (e) => {
     e.preventDefault();
     setGenerating(true);
+    setAiGenErr('');
     try {
       // Ixtiyoriy maydonlar bo'sh bo'lsa umuman yubormaymiz (bo'sh string 400 berishi mumkin)
       const body = { topic: aiGenTopic.trim(), difficulty: aiGenDiff };
@@ -1315,7 +1359,10 @@ function CasePanel({ api, addToast }) {
       addToast("AI case qoralamasi yaratildi (draft) — ro'yxatdan ko'rib chiqing", "ok");
       setIsAiGenOpen(false);
       load();
-    } catch {}
+    } catch (err) {
+      // Server xatosini modal ichida doimiy ko'rsatamiz (toast tez yo'qoladi)
+      setAiGenErr(err?.message || 'Noma\'lum xatolik');
+    }
     finally {
       setGenerating(false);
     }
@@ -1553,7 +1600,7 @@ function CasePanel({ api, addToast }) {
         </div>
         <button onClick={() => { setPage(1); load(); }}>🔍 Qidirish</button>
         <button className="primary" onClick={handleOpenCreateCase}>+ Yangi</button>
-        <button className="primary" onClick={() => setIsAiGenOpen(true)}>🤖 AI bilan yaratish</button>
+        <button className="primary" onClick={() => { setAiGenErr(''); setIsAiGenOpen(true); }}>🤖 AI bilan yaratish</button>
       </div>
 
       {loading ? (
@@ -1633,6 +1680,11 @@ function CasePanel({ api, addToast }) {
           <div className="modal">
             <h3>AI yordamida case generatsiyasi</h3>
             <form onSubmit={handleAiGenSubmit}>
+              {aiGenErr && (
+                <div style={{ color: '#fca5a5', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', maxHeight: '160px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  <strong>Server xatosi:</strong> {aiGenErr}
+                </div>
+              )}
               <div className="field">
                 <label>Mavzu (matn) *</label>
                 <input
