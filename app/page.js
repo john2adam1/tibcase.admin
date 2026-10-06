@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-const API_BASE = 'https://dev-medic.axadjonovsardorbek.uz';
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'https://dev-medic.axadjonovsardorbek.uz').replace(/\/$/, '');
 
 export default function AdminApp() {
   const [token, setToken] = useState('');

@@ -1,0 +1,16 @@
+services:
+  admin:
+    build:
+      context: .
+      args:
+        # Admin panel brauzerdan to'g'ridan-to'g'ri shu backendga so'rov yuboradi.
+        # Build vaqtida kodga joylanadi: o'zgartirsangiz `docker compose build` qayta kerak.
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-https://dev-medic.axadjonovsardorbek.uz}
+    image: tibcase-admin:latest
+    container_name: tibcase-admin
+    restart: unless-stopped
+    environment:
+      # Faqat /api/... proxy route (app/api) uchun, runtime'da o'qiladi
+      BACKEND_API_URL: ${BACKEND_API_URL:-https://dev-medic.axadjonovsardorbek.uz}
+    ports:
+      - "${PORT:-3000}:3000"
