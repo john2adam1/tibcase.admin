@@ -3,6 +3,7 @@ import { Icon } from '../components/Icons';
 import { DataService } from '../lib/api';
 import { CaseEditorModal } from './CaseEditorModal';
 import { CaseSimulationModal } from '../components/CaseSimulationModal';
+import { Modal } from '../components/Modal';
 
 export const CasesView = ({ onShowToast, lang = 'uz' }) => {
   const [cases, setCases] = useState([]);
@@ -23,6 +24,15 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
 
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
   const [simCase, setSimCase] = useState(null);
+
+  // AI Gen state
+  const [isAiGenOpen, setIsAiGenOpen] = useState(false);
+  const [aiGenTopic, setAiGenTopic] = useState('');
+  const [aiGenDiff, setAiGenDiff] = useState('medium');
+  const [aiGenComplaint, setAiGenComplaint] = useState('');
+  const [aiGenAnswer, setAiGenAnswer] = useState('');
+  const [aiGenErr, setAiGenErr] = useState('');
+  const [generating, setGenerating] = useState(false);
 
   const loadAll = async () => {
     setLoading(true);
@@ -97,6 +107,37 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
     }
   };
 
+  const handleAiGenSubmit = async (e) => {
+    e.preventDefault();
+    if (!aiGenTopic.trim()) {
+      setAiGenErr("Mavzu matnini kiriting");
+      return;
+    }
+    setGenerating(true);
+    setAiGenErr('');
+    try {
+      const payload = {
+        topic: aiGenTopic.trim(),
+        difficulty: aiGenDiff
+      };
+      if (aiGenComplaint.trim()) payload.chief_complaint = aiGenComplaint.trim();
+      if (aiGenAnswer.trim()) payload.expected_answer = aiGenAnswer.trim();
+
+      await DataService.aiGenerateCase(payload);
+      onShowToast("AI keys qoralamasi muvaffaqiyatli yaratildi!", "success");
+      setIsAiGenOpen(false);
+      setAiGenTopic('');
+      setAiGenComplaint('');
+      setAiGenAnswer('');
+      loadAll();
+    } catch (err) {
+      setAiGenErr(err?.message || "AI generatsiyasida xatolik");
+      onShowToast(err?.message || "AI keys generatsiyasida xatolik", "error");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Action Bar */}
@@ -108,16 +149,28 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingCase(null);
-            setIsEditorOpen(true);
-          }}
-          className="btn-primary"
-        >
-          <Icon name="plus" size={16} />
-          <span>Yangi Keys Yaratish</span>
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => {
+              setAiGenErr('');
+              setIsAiGenOpen(true);
+            }}
+            className="btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span>🤖 AI bilan yaratish</span>
+          </button>
+          <button
+            onClick={() => {
+              setEditingCase(null);
+              setIsEditorOpen(true);
+            }}
+            className="btn-primary"
+          >
+            <Icon name="plus" size={16} />
+            <span>+ Yangi Keys Yaratish</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters & Search Card */}
@@ -290,6 +343,98 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
         caseData={simCase}
         lang={lang}
       />
+
+      {/* AI Case Generation Modal */}
+      <Modal
+        isOpen={isAiGenOpen}
+        onClose={() => setIsAiGenOpen(false)}
+        title="AI Yordamida Klinik Keys Yaratish (POST /web/case/ai-generate)"
+        maxWidth="540px"
+      >
+        <form onSubmit={handleAiGenSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {aiGenErr && (
+            <div style={{
+              color: '#fca5a5',
+              background: 'rgba(239,68,68,.12)',
+              border: '1px solid rgba(239,68,68,.4)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontSize: '0.8rem',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word'
+            }}>
+              <strong>Server xatosi:</strong> {aiGenErr}
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">Mavzu (Topic / Tashxis) *:</label>
+            <input
+              type="text"
+              className="form-input"
+              required
+              placeholder="Masalan: O'tkir appenditsit yoki Gipertonik kriz"
+              value={aiGenTopic}
+              onChange={(e) => setAiGenTopic(e.target.value)}
+            />
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              Gemini AI shu mavzuga mos to'liq klinik keys stsenariysi va bemor vitallarini generatsiya qiladi.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Qiyinlik Darajasi *:</label>
+            <select
+              className="form-select"
+              value={aiGenDiff}
+              onChange={(e) => setAiGenDiff(e.target.value)}
+            >
+              <option value="easy">Easy (Oson)</option>
+              <option value="medium">Medium (O'rta)</option>
+              <option value="hard">Hard (Qiyin)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Asosiy Shikoyat (Chief Complaint — Ixtiyoriy):</label>
+            <textarea
+              className="form-textarea"
+              rows={2}
+              placeholder="Bo'sh qoldirilsa AI o'zi yaratadi..."
+              value={aiGenComplaint}
+              onChange={(e) => setAiGenComplaint(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Kutilayotgan To'g'ri Tashxis (Expected Diagnosis — Ixtiyoriy):</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Bo'sh qoldirilsa AI o'zi aniqlaydi..."
+              value={aiGenAnswer}
+              onChange={(e) => setAiGenAnswer(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+            <button
+              type="button"
+              onClick={() => setIsAiGenOpen(false)}
+              className="btn-secondary"
+            >
+              Bekor qilish
+            </button>
+            <button
+              type="submit"
+              disabled={generating}
+              className="btn-primary"
+            >
+              {generating ? "AI generatsiya qilmoqda..." : "🤖 Generatsiya qilish"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

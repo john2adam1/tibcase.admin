@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'https://dev-medic.axadjonovsardorbek.uz').replace(/\/$/, '');
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'https://dev.tibstation.uz').replace(/\/$/, '');
 
 export default function AdminApp() {
   const [token, setToken] = useState('');
@@ -495,7 +495,11 @@ async function loadRefOptions(kind, api) {
       items = extractList(r).items.map(x => ({ value: x.id, label: (x.name && (x.name.uz || x.name.ru || x.name.en)) || x.id }));
     } else if (kind === 'topic') {
       const r = await api('/web/topic', { query: { limit: 200, page: 1 } });
-      items = extractList(r).items.map(x => ({ value: x.id, label: (x.name && (x.name.uz || x.name.ru || x.name.en)) || x.id }));
+      items = extractList(r).items.map(x => ({
+        value: x.id,
+        label: (x.name && (x.name.uz || x.name.ru || x.name.en)) || x.id,
+        category_id: x.category_id
+      }));
     } else if (kind === 'partner') {
       const r = await api('/web/partner', { query: { limit: 100, page: 1 } });
       items = extractList(r).items.map(x => ({ value: x.id, label: x.name || x.id }));
@@ -758,7 +762,7 @@ const MODULE_CONFIGS = {
   promocode: {
     label: "Promokodlar",
     base: '/web/promocode',
-    columns: ['id', 'code', 'partner_id', 'value', 'status', 'issued_at', 'expires_at'],
+    columns: ['id', 'code', 'partner_name', 'value', 'status', 'issued_at', 'expires_at'],
     search: [
       { name: 'partner_id', label: 'Hamkor', type: 'select', asyncOptions: 'partner', includeEmpty: true },
       { name: 'status', label: 'Status', type: 'select', includeEmpty: true, options: [{ value: 'active', label: 'Active' }, { value: 'used', label: 'Used' }, { value: 'expired', label: 'Expired' }] }
@@ -1041,7 +1045,13 @@ function GenericPanel({ moduleKey, api, addToast }) {
             {items.map((row, idx) => (
               <tr key={row.id || idx}>
                 {cfg.columns.map(c => (
-                  <td key={c}>{fmtCell(row[c])}</td>
+                  <td key={c}>
+                    {moduleKey === 'promocode' && c === 'partner_name'
+                      ? fmtCell(row.partner_name || row.partner_id)
+                      : (moduleKey === 'promocode' && c === 'value'
+                          ? <span title={`${row.value} tanga`}>🪙 {row.value}</span>
+                          : fmtCell(row[c]))}
+                  </td>
                 ))}
                 <td>
                   <div className="actions">
@@ -1275,6 +1285,47 @@ function CasePanel({ api, addToast }) {
   const [aiGenErr, setAiGenErr] = useState('');
   const [generating, setGenerating] = useState(false);
 
+  // Excel/CSV import
+  const importInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/\.(xlsx|csv)$/i.test(file.name)) {
+      addToast("Faqat .xlsx yoki .csv fayl yuklang", "err");
+      if (importInputRef.current) importInputRef.current.value = '';
+      return;
+    }
+    const fd = new FormData();
+    fd.append('file', file);
+    setImporting(true);
+    try {
+      const res = await api('/web/case/import', { method: 'POST', body: fd, isForm: true });
+      setImportResult({ fileName: file.name, ...(res || {}) });
+      if (res?.created > 0) {
+        addToast(`${res.created} ta case yuklandi`, "ok");
+        load();
+      }
+    } catch {
+      // xato api() ichida ko'rsatiladi
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const csv = '\uFEFFtopic,title_uz,title_ru,title_en,difficulty\nArterial gipertenziya,Namuna keys,Пример кейса,Sample case,easy\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'case_import_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Info modal (for test patient / debrief)
   const [infoModal, setInfoModal] = useState(null);
 
@@ -1423,8 +1474,10 @@ function CasePanel({ api, addToast }) {
 
   const handleOpenCreateCase = () => {
     setEditingCase(null);
+    const firstTopic = topics[0];
     setCaseForm({
-      topic_id: topics[0]?.value || '',
+      category_id: firstTopic?.category_id || categories[0]?.value || '',
+      topic_id: firstTopic?.value || '',
       title: { uz: '', ru: '', en: '' },
       subtitle: { uz: '', ru: '', en: '' },
       chief_complaint: { uz: '', ru: '', en: '' },
@@ -1449,7 +1502,9 @@ function CasePanel({ api, addToast }) {
     try {
       full = await api(`/web/case/${c.id}`);
     } catch {}
+    const matchedTopic = topics.find(t => t.value === (full.topic_id || c.topic_id));
     setCaseForm({
+      category_id: full.category_id || matchedTopic?.category_id || '',
       topic_id: full.topic_id || topics[0]?.value || '',
       title: full.title || { uz: '', ru: '', en: '' },
       subtitle: full.subtitle || { uz: '', ru: '', en: '' },
@@ -1486,8 +1541,12 @@ function CasePanel({ api, addToast }) {
       return;
     }
 
+    const matchedTopic = topics.find(t => t.value === caseForm.topic_id);
+    const resolvedCatId = caseForm.category_id || matchedTopic?.category_id || (categories[0]?.value ?? '');
+
     const payload = {
       ...caseForm,
+      category_id: resolvedCatId || undefined,
       scenario: parsedScenario,
       patient_age: Number(caseForm.patient_age) || 0,
       expected_duration_minutes: Number(caseForm.expected_duration_minutes) || 0,
@@ -1601,6 +1660,16 @@ function CasePanel({ api, addToast }) {
         <button onClick={() => { setPage(1); load(); }}>🔍 Qidirish</button>
         <button className="primary" onClick={handleOpenCreateCase}>+ Yangi</button>
         <button className="primary" onClick={() => { setAiGenErr(''); setIsAiGenOpen(true); }}>🤖 AI bilan yaratish</button>
+        <button className="primary" disabled={importing} onClick={() => importInputRef.current?.click()}>
+          {importing ? '⏳ Yuklanmoqda...' : '📥 Excel/CSV yuklash'}
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".xlsx,.csv"
+          className="hidden"
+          onChange={handleImportFile}
+        />
       </div>
 
       {loading ? (
@@ -1674,6 +1743,31 @@ function CasePanel({ api, addToast }) {
         </div>
       )}
 
+      {/* Import Result Modal */}
+      {importResult && (
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setImportResult(null); }}>
+          <div className="modal">
+            <h3>Excel/CSV yuklash natijasi</h3>
+            <p className="muted" style={{ marginBottom: '10px' }}>{importResult.fileName}</p>
+            <p style={{ marginBottom: '6px' }}>
+              Jami qatorlar: <b>{importResult.total ?? 0}</b> · Yaratildi: <b style={{ color: '#34d399' }}>{importResult.created ?? 0}</b>
+              {' '}· Nashr: <b>{importResult.published ?? 0}</b> · Xato: <b style={{ color: '#f87171' }}>{importResult.failed ?? 0}</b>
+            </p>
+            {(importResult.errors || []).length > 0 && (
+              <div style={{ maxHeight: '220px', overflow: 'auto', marginTop: '10px', fontSize: '12px', color: '#fca5a5', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px' }}>
+                {importResult.errors.map((er, i) => (
+                  <div key={i}>Qator {er.row}: {er.message}</div>
+                ))}
+              </div>
+            )}
+            <div className="modalFooter">
+              <button type="button" onClick={handleDownloadTemplate}>📄 Namuna CSV</button>
+              <button type="button" className="primary" onClick={() => setImportResult(null)}>Yopish</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Gen Modal */}
       {isAiGenOpen && (
         <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsAiGenOpen(false); }}>
@@ -1739,15 +1833,36 @@ function CasePanel({ api, addToast }) {
             <h3>{editingCase ? "Case tahrirlash" : "Yangi Case"}</h3>
             <form onSubmit={handleSaveCase}>
               <div className="formGrid">
-                <div className="field full">
+                <div className="field">
+                  <label>Bo'lim (Category)</label>
+                  <select
+                    value={caseForm.category_id || ''}
+                    onChange={(e) => setCaseForm({ ...caseForm, category_id: e.target.value })}
+                  >
+                    <option value="">— bo'limni tanlang —</option>
+                    {categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+
+                <div className="field">
                   <label>Mavzu (Topic) *</label>
                   <select
                     value={caseForm.topic_id}
-                    onChange={(e) => setCaseForm({ ...caseForm, topic_id: e.target.value })}
+                    onChange={(e) => {
+                      const tVal = e.target.value;
+                      const matched = topics.find(t => t.value === tVal);
+                      setCaseForm({
+                        ...caseForm,
+                        topic_id: tVal,
+                        category_id: matched?.category_id || caseForm.category_id
+                      });
+                    }}
                     required
                   >
                     <option value="">— mavzuni tanlang —</option>
-                    {topics.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    {(caseForm.category_id ? topics.filter(t => !t.category_id || t.category_id === caseForm.category_id) : topics).map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
                   </select>
                 </div>
 

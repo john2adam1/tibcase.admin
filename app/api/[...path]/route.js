@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const getBackendUrl = () => {
-  return (process.env.BACKEND_API_URL || 'https://api.tibsphereai.uz').replace(/\/$/, '');
+  return (process.env.BACKEND_API_URL || 'https://dev.tibstation.uz').replace(/\/$/, '');
 };
 
 async function handleProxy(req, context) {

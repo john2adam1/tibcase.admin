@@ -11,12 +11,14 @@ export const CaseSimulationModal = ({ isOpen, onClose, caseData, lang = 'uz' }) 
 
   if (!caseData) return null;
 
-  const vitals = caseData.initial_vitals || {
-    blood_pressure: "120/80 mmHg",
-    heart_rate: 75,
-    temperature: 36.6,
-    spo2: 98,
-    respiratory_rate: 16
+  const rawVitals = caseData.initial_vitals || {};
+  const vitals = {
+    bp: rawVitals.bp || rawVitals.blood_pressure || "120/80",
+    hr: rawVitals.hr ?? rawVitals.heart_rate ?? 75,
+    temp: rawVitals.temp ?? rawVitals.temperature ?? 36.6,
+    spo2: rawVitals.spo2 ?? 98,
+    rr: rawVitals.rr ?? rawVitals.respiratory_rate ?? 16,
+    gcs: rawVitals.gcs ?? 15
   };
 
   const handleRunEvaluation = () => {
@@ -38,7 +40,7 @@ export const CaseSimulationModal = ({ isOpen, onClose, caseData, lang = 'uz' }) 
       {/* Vitals Monitor Bar */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
         gap: '12px',
         marginBottom: '20px',
         padding: '14px',
@@ -48,11 +50,11 @@ export const CaseSimulationModal = ({ isOpen, onClose, caseData, lang = 'uz' }) 
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Qon Bosimi (BP)</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>{vitals.blood_pressure}</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>{vitals.bp}</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Puls (HR)</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#f43f5e', fontFamily: 'var(--font-mono)' }}>{vitals.heart_rate} bpm</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#f43f5e', fontFamily: 'var(--font-mono)' }}>{vitals.hr} bpm</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Saturatsiya (SpO2)</div>
@@ -60,11 +62,15 @@ export const CaseSimulationModal = ({ isOpen, onClose, caseData, lang = 'uz' }) 
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Harorat (Temp)</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fbbf24', fontFamily: 'var(--font-mono)' }}>{vitals.temperature} °C</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fbbf24', fontFamily: 'var(--font-mono)' }}>{vitals.temp} °C</div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nafas Soni (RR)</div>
-          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#a855f7', fontFamily: 'var(--font-mono)' }}>{vitals.respiratory_rate} /min</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nafas (RR)</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#a855f7', fontFamily: 'var(--font-mono)' }}>{vitals.rr} /min</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Glazgo (GCS)</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ec4899', fontFamily: 'var(--font-mono)' }}>{vitals.gcs} / 15</div>
         </div>
       </div>
 

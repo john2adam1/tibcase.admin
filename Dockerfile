@@ -13,7 +13,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Brauzer kodiga build vaqtida joylanadi (NEXT_PUBLIC_*)
-ARG NEXT_PUBLIC_API_BASE=https://dev-medic.axadjonovsardorbek.uz
+ARG NEXT_PUBLIC_API_BASE=https://dev.tibstation.uz
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 ENV NEXT_TELEMETRY_DISABLED=1
 

@@ -6,8 +6,8 @@ export const CaseEditorModal = ({
   isOpen,
   onClose,
   caseItem,
-  categories,
-  topics,
+  categories = [],
+  topics = [],
   onSave,
   lang = 'uz'
 }) => {
@@ -30,11 +30,12 @@ export const CaseEditorModal = ({
     cover_image_url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&auto=format&fit=crop&q=60',
     expected_answer: '',
     initial_vitals: {
-      blood_pressure: '120/80 mmHg',
-      heart_rate: 76,
-      temperature: 36.6,
+      bp: '120/80',
+      hr: 76,
+      temp: 36.6,
       spo2: 98,
-      respiratory_rate: 16
+      rr: 16,
+      gcs: 15
     },
     scenario: {
       patient_history: '',
@@ -46,23 +47,36 @@ export const CaseEditorModal = ({
     }
   });
 
-  const [rawLabText, setRawLabText] = useState('');
+  const [rawLabText, setRawLabText] = useState('{}');
   const [rawDiffText, setRawDiffText] = useState('');
   const [rawTreatmentText, setRawTreatmentText] = useState('');
 
   useEffect(() => {
     if (caseItem) {
+      const v = caseItem.initial_vitals || {};
       setFormData({
         ...caseItem,
         title: caseItem.title || { uz: '', ru: '', en: '' },
         subtitle: caseItem.subtitle || { uz: '', ru: '', en: '' },
         chief_complaint: caseItem.chief_complaint || { uz: '', ru: '', en: '' },
-        initial_vitals: caseItem.initial_vitals || {
-          blood_pressure: '',
-          heart_rate: '',
-          temperature: '',
-          spo2: '',
-          respiratory_rate: ''
+        category_id: caseItem.category_id || '',
+        topic_id: caseItem.topic_id || '',
+        difficulty: caseItem.difficulty || 'medium',
+        status: caseItem.status || 'draft',
+        patient_age: caseItem.patient_age ?? 45,
+        patient_gender: caseItem.patient_gender || 'male',
+        visual_state: caseItem.visual_state || 'normal',
+        expected_duration_minutes: caseItem.expected_duration_minutes ?? 15,
+        order_num: caseItem.order_num ?? 1,
+        cover_image_url: caseItem.cover_image_url || '',
+        expected_answer: caseItem.expected_answer || '',
+        initial_vitals: {
+          bp: v.bp || v.blood_pressure || '120/80',
+          hr: v.hr ?? v.heart_rate ?? 76,
+          temp: v.temp ?? v.temperature ?? 36.6,
+          spo2: v.spo2 ?? 98,
+          rr: v.rr ?? v.respiratory_rate ?? 16,
+          gcs: v.gcs ?? 15
         },
         scenario: caseItem.scenario || {
           patient_history: '',
@@ -84,15 +98,17 @@ export const CaseEditorModal = ({
       setRawTreatmentText((caseItem.scenario?.treatment_steps || []).join('\n'));
     } else {
       // Default empty
+      const defaultCat = categories[0]?.id || '';
+      const defaultTopic = topics[0]?.id || '';
       setFormData({
         title: { uz: '', ru: '', en: '' },
         subtitle: { uz: '', ru: '', en: '' },
         chief_complaint: { uz: '', ru: '', en: '' },
-        category_id: categories[0]?.id || '',
-        topic_id: topics[0]?.id || '',
+        category_id: defaultCat,
+        topic_id: defaultTopic,
         difficulty: 'medium',
         status: 'draft',
-        patient_age: '',
+        patient_age: 45,
         patient_gender: 'male',
         visual_state: 'normal',
         expected_duration_minutes: 15,
@@ -100,11 +116,12 @@ export const CaseEditorModal = ({
         cover_image_url: '',
         expected_answer: '',
         initial_vitals: {
-          blood_pressure: '',
-          heart_rate: '',
-          temperature: '',
-          spo2: '',
-          respiratory_rate: ''
+          bp: '120/80',
+          hr: 80,
+          temp: 36.6,
+          spo2: 98,
+          rr: 16,
+          gcs: 15
         },
         scenario: {
           patient_history: '',
@@ -121,6 +138,16 @@ export const CaseEditorModal = ({
     }
   }, [caseItem, isOpen, categories, topics]);
 
+  // Sync category if topic is selected
+  const handleTopicChange = (topicId) => {
+    const matched = topics.find(t => t.id === topicId);
+    setFormData(prev => ({
+      ...prev,
+      topic_id: topicId,
+      category_id: matched?.category_id || prev.category_id
+    }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -134,16 +161,33 @@ export const CaseEditorModal = ({
 
     const payload = {
       ...formData,
+      category_id: formData.category_id || undefined,
+      patient_age: parseInt(formData.patient_age, 10) || 0,
+      expected_duration_minutes: parseInt(formData.expected_duration_minutes, 10) || 15,
+      order_num: parseInt(formData.order_num, 10) || 1,
+      initial_vitals: {
+        bp: String(formData.initial_vitals?.bp || '120/80'),
+        hr: Number(formData.initial_vitals?.hr) || 80,
+        temp: Number(formData.initial_vitals?.temp) || 36.6,
+        spo2: Number(formData.initial_vitals?.spo2) || 98,
+        rr: Number(formData.initial_vitals?.rr) || 16,
+        gcs: Number(formData.initial_vitals?.gcs) || 15
+      },
       scenario: {
         ...formData.scenario,
         lab_tests: parsedLabs,
-        differential_diagnoses: rawDiffText.split('\n').filter(Boolean),
-        treatment_steps: rawTreatmentText.split('\n').filter(Boolean)
+        differential_diagnoses: rawDiffText.split('\n').map(s => s.trim()).filter(Boolean),
+        treatment_steps: rawTreatmentText.split('\n').map(s => s.trim()).filter(Boolean)
       }
     };
 
     onSave(payload);
   };
+
+  // Filter topics based on category if selected
+  const availableTopics = formData.category_id
+    ? topics.filter(t => !t.category_id || t.category_id === formData.category_id)
+    : topics;
 
   return (
     <Modal
@@ -189,31 +233,30 @@ export const CaseEditorModal = ({
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div className="form-group">
-                <label className="form-label">Kategoriya / Yo'nalish:</label>
+                <label className="form-label">Kategoriya / Bo'lim:</label>
                 <select
                   className="form-select"
                   value={formData.category_id}
                   onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                  required
                 >
-                  <option value="">Kategoriyani tanlang</option>
+                  <option value="">— Bo'limni tanlang —</option>
                   {categories.map(c => (
-                    <option key={c.id} value={c.id}>{c.name?.[lang] || c.name?.uz}</option>
+                    <option key={c.id} value={c.id}>{c.name?.[lang] || c.name?.uz || c.name}</option>
                   ))}
                 </select>
               </div>
 
               <div className="form-group">
-                <label className="form-label">Mavzu (Topic):</label>
+                <label className="form-label">Mavzu (Topic) *:</label>
                 <select
                   className="form-select"
                   value={formData.topic_id}
-                  onChange={(e) => setFormData({ ...formData, topic_id: e.target.value })}
+                  onChange={(e) => handleTopicChange(e.target.value)}
                   required
                 >
-                  <option value="">Mavzuni tanlang</option>
-                  {topics.map(t => (
-                    <option key={t.id} value={t.id}>{t.name?.[lang] || t.name?.uz}</option>
+                  <option value="">— Mavzuni tanlang —</option>
+                  {availableTopics.map(t => (
+                    <option key={t.id} value={t.id}>{t.name?.[lang] || t.name?.uz || t.name}</option>
                   ))}
                 </select>
               </div>
@@ -221,12 +264,12 @@ export const CaseEditorModal = ({
 
             {/* Multilingual Titles */}
             <div className="form-group">
-              <label className="form-label">Keys Nomi (O'zbekcha):</label>
+              <label className="form-label">Keys Nomi (O'zbekcha) *:</label>
               <input
                 className="form-input"
                 required
                 placeholder="Masalan: O'tkir Miokard Infarkti (STEMI)"
-                value={formData.title.uz}
+                value={formData.title.uz || ''}
                 onChange={(e) => setFormData({ ...formData, title: { ...formData.title, uz: e.target.value } })}
               />
             </div>
@@ -263,6 +306,17 @@ export const CaseEditorModal = ({
               />
             </div>
 
+            <div className="form-group">
+              <label className="form-label">Muqova Rasm URL (Cover Image):</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="https://images.unsplash.com/..."
+                value={formData.cover_image_url || ''}
+                onChange={(e) => setFormData({ ...formData, cover_image_url: e.target.value })}
+              />
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
               <div className="form-group">
                 <label className="form-label">Qiyinlik Darajasi:</label>
@@ -295,7 +349,7 @@ export const CaseEditorModal = ({
                   type="number"
                   className="form-input"
                   value={formData.expected_duration_minutes}
-                  onChange={(e) => setFormData({ ...formData, expected_duration_minutes: parseInt(e.target.value) || 15 })}
+                  onChange={(e) => setFormData({ ...formData, expected_duration_minutes: parseInt(e.target.value, 10) || 15 })}
                 />
               </div>
             </div>
@@ -312,7 +366,7 @@ export const CaseEditorModal = ({
                   type="number"
                   className="form-input"
                   value={formData.patient_age}
-                  onChange={(e) => setFormData({ ...formData, patient_age: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, patient_age: parseInt(e.target.value, 10) || 0 })}
                 />
               </div>
 
@@ -345,7 +399,7 @@ export const CaseEditorModal = ({
             </div>
 
             <div className="form-group">
-              <label className="form-label">Asosiy Shikoyat (Chief Complaint UZ):</label>
+              <label className="form-label">Asosiy Shikoyat (Chief Complaint UZ) *:</label>
               <textarea
                 className="form-textarea"
                 required
@@ -356,20 +410,21 @@ export const CaseEditorModal = ({
               />
             </div>
 
-            {/* Vitals Box */}
+            {/* Vitals Box - Swagger models.CaseVitals */}
             <div style={{ padding: '16px', background: '#0a1424', borderRadius: '10px', border: '1px solid #1e3a66' }}>
               <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--accent-cyan)', marginBottom: '12px' }}>
-                Boshlang'ich Vital Ko'rsatkichlar (Initial Vitals)
+                Boshlang'ich Vital Ko'rsatkichlar (Initial Vitals — Swagger Schema)
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
                 <div>
                   <label className="form-label">Qon Bosimi (BP):</label>
                   <input
                     className="form-input"
-                    value={formData.initial_vitals.blood_pressure}
+                    placeholder="120/80"
+                    value={formData.initial_vitals.bp || ''}
                     onChange={(e) => setFormData({
                       ...formData,
-                      initial_vitals: { ...formData.initial_vitals, blood_pressure: e.target.value }
+                      initial_vitals: { ...formData.initial_vitals, bp: e.target.value }
                     })}
                   />
                 </div>
@@ -378,10 +433,10 @@ export const CaseEditorModal = ({
                   <input
                     type="number"
                     className="form-input"
-                    value={formData.initial_vitals.heart_rate}
+                    value={formData.initial_vitals.hr ?? 80}
                     onChange={(e) => setFormData({
                       ...formData,
-                      initial_vitals: { ...formData.initial_vitals, heart_rate: parseInt(e.target.value) || 0 }
+                      initial_vitals: { ...formData.initial_vitals, hr: parseInt(e.target.value, 10) || 0 }
                     })}
                   />
                 </div>
@@ -391,10 +446,10 @@ export const CaseEditorModal = ({
                     type="number"
                     step="0.1"
                     className="form-input"
-                    value={formData.initial_vitals.temperature}
+                    value={formData.initial_vitals.temp ?? 36.6}
                     onChange={(e) => setFormData({
                       ...formData,
-                      initial_vitals: { ...formData.initial_vitals, temperature: parseFloat(e.target.value) || 36.6 }
+                      initial_vitals: { ...formData.initial_vitals, temp: parseFloat(e.target.value) || 36.6 }
                     })}
                   />
                 </div>
@@ -403,10 +458,10 @@ export const CaseEditorModal = ({
                   <input
                     type="number"
                     className="form-input"
-                    value={formData.initial_vitals.spo2}
+                    value={formData.initial_vitals.spo2 ?? 98}
                     onChange={(e) => setFormData({
                       ...formData,
-                      initial_vitals: { ...formData.initial_vitals, spo2: parseInt(e.target.value) || 98 }
+                      initial_vitals: { ...formData.initial_vitals, spo2: parseInt(e.target.value, 10) || 98 }
                     })}
                   />
                 </div>
@@ -415,10 +470,24 @@ export const CaseEditorModal = ({
                   <input
                     type="number"
                     className="form-input"
-                    value={formData.initial_vitals.respiratory_rate}
+                    value={formData.initial_vitals.rr ?? 16}
                     onChange={(e) => setFormData({
                       ...formData,
-                      initial_vitals: { ...formData.initial_vitals, respiratory_rate: parseInt(e.target.value) || 16 }
+                      initial_vitals: { ...formData.initial_vitals, rr: parseInt(e.target.value, 10) || 16 }
+                    })}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Glazgo (GCS 3-15):</label>
+                  <input
+                    type="number"
+                    min="3"
+                    max="15"
+                    className="form-input"
+                    value={formData.initial_vitals.gcs ?? 15}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      initial_vitals: { ...formData.initial_vitals, gcs: parseInt(e.target.value, 10) || 15 }
                     })}
                   />
                 </div>
@@ -489,7 +558,7 @@ export const CaseEditorModal = ({
         {activeTab === 'protocol' && (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Kutilayotgan To'g'ri Tashxis (Expected Diagnosis):</label>
+              <label className="form-label">Kutilayotgan To'g'ri Tashxis (Expected Diagnosis) *:</label>
               <input
                 className="form-input"
                 required
