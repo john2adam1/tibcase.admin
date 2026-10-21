@@ -83,7 +83,7 @@ export default function AdminApp() {
   };
 
   // Universal API caller with auto-refresh
-  const api = async (path, { method = 'GET', body = null, isForm = false, query = null } = {}, retry = true) => {
+  const api = async (path, { method = 'GET', body = null, isForm = false, query = null, timeoutMs, silent = false } = {}, retry = true) => {
     let url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
     if (query) {
       const qs = Object.entries(query)
@@ -107,16 +107,24 @@ export default function AdminApp() {
     }
 
     let res;
+    const controller = timeoutMs ? new AbortController() : null;
+    const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
-      res = await fetch(url, { method, headers, body: fetchBody });
+      res = await fetch(url, { method, headers, body: fetchBody, signal: controller?.signal });
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        addToast("So'rov vaqti tugadi. Qayta urinib ko'ring.", 'err');
+        throw new Error("So'rov vaqti tugadi");
+      }
       addToast(`Tarmoq xatosi: ${err.message}`, 'err');
       throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
 
     if (res.status === 401 && retry && refreshRef.current && path !== '/auth/token/refresh') {
       const ok = await doRefreshToken();
-      if (ok) return api(path, { method, body, isForm, query }, false);
+      if (ok) return api(path, { method, body, isForm, query, timeoutMs, silent }, false);
       handleLogout();
       addToast("Sessiya tugagan, qaytadan kiring", "err");
       throw new Error("Session expired");
@@ -136,7 +144,7 @@ export default function AdminApp() {
       else if (data && data.message) msg = data.message;
       else if (typeof data === 'string' && data) msg = data;
       if (res.status === 401) msg = `Sessiya tugagan yoki token noto'g'ri. Qayta login qiling. (${msg})`;
-      addToast(msg, 'err');
+      if (!silent) addToast(msg, 'err');
       const err = new Error(msg);
       err.status = res.status;
       throw err;
@@ -318,6 +326,12 @@ export default function AdminApp() {
           🧠 Case'lar
         </button>
         <button
+          className={`nav ${currentTab === 'case_source' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('case_source')}
+        >
+          📚 Ishonchli manbalar
+        </button>
+        <button
           className={`nav ${currentTab === 'level' ? 'active' : ''}`}
           onClick={() => setCurrentTab('level')}
         >
@@ -422,6 +436,7 @@ export default function AdminApp() {
         {currentTab === 'category' && <GenericPanel key="category" moduleKey="category" api={api} addToast={addToast} />}
         {currentTab === 'topic' && <GenericPanel key="topic" moduleKey="topic" api={api} addToast={addToast} />}
         {currentTab === 'case' && <CasePanel api={api} addToast={addToast} />}
+        {currentTab === 'case_source' && <GenericPanel key="case_source" moduleKey="case_source" api={api} addToast={addToast} />}
         {currentTab === 'level' && <GenericPanel key="level" moduleKey="level" api={api} addToast={addToast} />}
         {currentTab === 'ai_prompt' && <AiPromptPanel api={api} addToast={addToast} />}
 
@@ -759,6 +774,17 @@ const MODULE_CONFIGS = {
     ],
     onSaved: () => invalidateRef('topic')
   },
+  case_source: {
+    label: "Ishonchli manbalar",
+    base: '/web/case-source',
+    columns: ['id', 'name', 'content', 'created_at'],
+    search: [{ name: 'name', label: 'Nomi', type: 'text' }],
+    fields: [
+      { name: 'name', label: 'Nomi', type: 'text', required: true },
+      { name: 'content', label: 'Veb-havola (http/https) yoki matn parchasi', type: 'textarea', full: true, rows: 8 }
+    ],
+    silentList: true
+  },
   promocode: {
     label: "Promokodlar",
     base: '/web/promocode',
@@ -849,6 +875,7 @@ function GenericPanel({ moduleKey, api, addToast }) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filters, setFilters] = useState({});
+  const [loadNote, setLoadNote] = useState('');
 
   // Dynamic async options cache for search and modal fields
   const [asyncOpts, setAsyncOpts] = useState({});
@@ -882,13 +909,15 @@ function GenericPanel({ moduleKey, api, addToast }) {
       query.limit = limit;
     }
     try {
-      const res = await api(cfg.base, { query });
+      const res = await api(cfg.base, { query, silent: !!cfg.silentList });
       const extracted = extractList(res);
       setItems(extracted.items);
       setCount(extracted.count);
-    } catch {
+      setLoadNote('');
+    } catch (err) {
       setItems([]);
       setCount(0);
+      setLoadNote(err?.status === 404 ? "Serverda bu bo'lim hali yo'q (404). Backend yangilangach ro'yxat chiqadi." : '');
     } finally {
       setLoading(false);
     }
@@ -950,8 +979,19 @@ function GenericPanel({ moduleKey, api, addToast }) {
       // admin-panel.html'dagi kabi: payload faqat forma maydonlaridan yig'iladi
       // (id/created_at kabi ortiqcha maydonlar yuborilmaydi) va har bir maydonning
       // standart qiymati bor (select -> birinchi variant, number -> 0, ml -> {uz,ru,en}).
+      const resolved = {};
+      (activeFields || []).forEach(f => {
+        const cur = formValues[f.name];
+        if (f.type === 'select') {
+          const opts = f.options || (f.asyncOptions ? asyncOpts[f.asyncOptions] || [] : []);
+          resolved[f.name] = cur !== undefined && cur !== null && cur !== '' ? cur : (f.includeEmpty ? '' : (opts[0]?.value ?? ''));
+        } else {
+          resolved[f.name] = cur;
+        }
+      });
       const payload = {};
       (activeFields || []).forEach(f => {
+        if (f.showIf && !f.showIf(resolved)) return;
         const cur = formValues[f.name];
         if (f.type === 'ml') {
           payload[f.name] = { uz: cur?.uz || '', ru: cur?.ru || '', en: cur?.en || '' };
@@ -989,6 +1029,7 @@ function GenericPanel({ moduleKey, api, addToast }) {
     <div>
       <h2 className="pageTitle">{cfg.label}</h2>
       <p className="pageDesc">{cfg.base}</p>
+      {loadNote && <p className="muted" style={{ marginBottom: '12px' }}>{loadNote}</p>}
 
       {/* Toolbar */}
       <div className="toolbar">
@@ -1145,7 +1186,7 @@ function GenericPanel({ moduleKey, api, addToast }) {
                         </div>
                       ) : f.type === 'textarea' ? (
                         <textarea
-                          rows={3}
+                          rows={f.rows || 3}
                           value={formValues[f.name] || ''}
                           onChange={(e) => setFormValues({ ...formValues, [f.name]: e.target.value })}
                         />
@@ -1272,18 +1313,21 @@ function CasePanel({ api, addToast }) {
     is_ai_generated: ''
   });
 
-  // Topic and category options
+  // Topic, category, and trusted-source options
   const [topics, setTopics] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [sources, setSources] = useState([]);
 
-  // AI Gen modal
-  const [isAiGenOpen, setIsAiGenOpen] = useState(false);
-  const [aiGenTopic, setAiGenTopic] = useState('');
-  const [aiGenDiff, setAiGenDiff] = useState('medium');
-  const [aiGenComplaint, setAiGenComplaint] = useState('');
-  const [aiGenAnswer, setAiGenAnswer] = useState('');
-  const [aiGenErr, setAiGenErr] = useState('');
-  const [generating, setGenerating] = useState(false);
+  // Batch AI modal
+  const [isAiBatchOpen, setIsAiBatchOpen] = useState(false);
+  const [aiBatchCategoryId, setAiBatchCategoryId] = useState('');
+  const [aiBatchTopicIds, setAiBatchTopicIds] = useState([]);
+  const [aiBatchDiff, setAiBatchDiff] = useState('medium');
+  const [aiBatchCount, setAiBatchCount] = useState(1);
+  const [aiBatchSourceIds, setAiBatchSourceIds] = useState([]);
+  const [aiBatchErr, setAiBatchErr] = useState('');
+  const [aiBatchResult, setAiBatchResult] = useState(null);
+  const [batchGenerating, setBatchGenerating] = useState(false);
 
   // Excel/CSV import
   const importInputRef = useRef(null);
@@ -1317,7 +1361,7 @@ function CasePanel({ api, addToast }) {
   };
 
   const handleDownloadTemplate = () => {
-    const csv = '\uFEFFtopic,title_uz,title_ru,title_en,difficulty\nArterial gipertenziya,Namuna keys,Пример кейса,Sample case,easy\n';
+    const csv = '\uFEFFtopic,title_uz,title_ru,title_en,difficulty,max_attempts\nArterial gipertenziya,Namuna keys,Пример кейса,Sample case,easy,1\n';
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
@@ -1332,14 +1376,19 @@ function CasePanel({ api, addToast }) {
   // Create / Edit Case modal
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const [editingCase, setEditingCase] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState('');
   const [caseForm, setCaseForm] = useState({
     topic_id: '',
+    topic: '',
+    complaint: '',
     title: { uz: '', ru: '', en: '' },
     subtitle: { uz: '', ru: '', en: '' },
     chief_complaint: { uz: '', ru: '', en: '' },
     expected_answer: '',
     cover_image_url: '',
     difficulty: 'medium',
+    max_attempts: 1,
     patient_age: 35,
     patient_gender: 'male',
     expected_duration_minutes: 15,
@@ -1355,7 +1404,17 @@ function CasePanel({ api, addToast }) {
     const c = await loadRefOptions('category', api);
     setTopics(t);
     setCategories(c);
+    try {
+      const res = await api('/web/case-source', { query: { limit: 200, page: 1 }, silent: true });
+      setSources(extractList(res).items);
+    } catch {
+      setSources([]);
+    }
   };
+
+  const toggleSourceId = (list, id) => (
+    list.includes(id) ? list.filter(x => x !== id) : [...list, id]
+  );
 
   const load = async () => {
     setLoading(true);
@@ -1397,26 +1456,57 @@ function CasePanel({ api, addToast }) {
     } catch {}
   };
 
-  const handleAiGenSubmit = async (e) => {
+  const batchTopicCount = aiBatchTopicIds.length
+    ? aiBatchTopicIds.length
+    : (aiBatchCategoryId ? topics.filter(t => t.category_id === aiBatchCategoryId).length : 0);
+  const batchTotal = batchTopicCount * (Number(aiBatchCount) || 0);
+
+  const handleAiBatchSubmit = async (e) => {
     e.preventDefault();
-    setGenerating(true);
-    setAiGenErr('');
+    if (!aiBatchTopicIds.length && !aiBatchCategoryId) {
+      setAiBatchErr("Bo'lim tanlang yoki kamida bitta mavzu belgilang");
+      return;
+    }
+    if (batchTotal < 1) {
+      setAiBatchErr("Har mavzuga kamida 1 ta case kerak");
+      return;
+    }
+    if (batchTotal > 20) {
+      setAiBatchErr(`Jami so'raladigan case soni 20 tadan oshmasligi kerak (hozir: ${batchTotal})`);
+      return;
+    }
+    setBatchGenerating(true);
+    setAiBatchErr('');
+    setAiBatchResult(null);
     try {
-      // Ixtiyoriy maydonlar bo'sh bo'lsa umuman yubormaymiz (bo'sh string 400 berishi mumkin)
-      const body = { topic: aiGenTopic.trim(), difficulty: aiGenDiff };
-      if (aiGenComplaint.trim()) body.chief_complaint = aiGenComplaint.trim();
-      if (aiGenAnswer.trim()) body.expected_answer = aiGenAnswer.trim();
-      await api('/web/case/ai-generate', { method: 'POST', body });
-      addToast("AI case qoralamasi yaratildi (draft) — ro'yxatdan ko'rib chiqing", "ok");
-      setIsAiGenOpen(false);
-      load();
+      const body = {
+        difficulty: aiBatchDiff,
+        count_per_topic: Number(aiBatchCount) || 1
+      };
+      if (aiBatchTopicIds.length) body.topic_ids = aiBatchTopicIds;
+      else body.category_id = aiBatchCategoryId;
+      if (aiBatchSourceIds.length) body.source_ids = aiBatchSourceIds;
+      const res = await api('/web/case/ai-generate-batch', { method: 'POST', body, timeoutMs: 5 * 60 * 1000 });
+      setAiBatchResult(res || {});
+      if ((res?.created || 0) > 0) {
+        addToast(`${res.created} ta draft case yaratildi`, "ok");
+        load();
+      }
     } catch (err) {
-      // Server xatosini modal ichida doimiy ko'rsatamiz (toast tez yo'qoladi)
-      setAiGenErr(err?.message || 'Noma\'lum xatolik');
+      setAiBatchErr(err?.message || 'Noma\'lum xatolik');
+    } finally {
+      setBatchGenerating(false);
     }
-    finally {
-      setGenerating(false);
-    }
+  };
+
+  const resetAiBatchForm = () => {
+    setAiBatchCategoryId('');
+    setAiBatchTopicIds([]);
+    setAiBatchDiff('medium');
+    setAiBatchCount(1);
+    setAiBatchSourceIds([]);
+    setAiBatchErr('');
+    setAiBatchResult(null);
   };
 
   const handleTestPatient = async (c) => {
@@ -1474,16 +1564,19 @@ function CasePanel({ api, addToast }) {
 
   const handleOpenCreateCase = () => {
     setEditingCase(null);
-    const firstTopic = topics[0];
+    setCreateErr('');
     setCaseForm({
-      category_id: firstTopic?.category_id || categories[0]?.value || '',
-      topic_id: firstTopic?.value || '',
+      category_id: '',
+      topic_id: '',
+      topic: '',
+      complaint: '',
       title: { uz: '', ru: '', en: '' },
       subtitle: { uz: '', ru: '', en: '' },
       chief_complaint: { uz: '', ru: '', en: '' },
       expected_answer: '',
       cover_image_url: '',
       difficulty: 'medium',
+      max_attempts: 1,
       patient_age: 35,
       patient_gender: 'male',
       expected_duration_minutes: 15,
@@ -1512,6 +1605,7 @@ function CasePanel({ api, addToast }) {
       expected_answer: full.expected_answer || '',
       cover_image_url: full.cover_image_url || '',
       difficulty: full.difficulty || 'medium',
+      max_attempts: full.max_attempts ?? 1,
       patient_age: full.patient_age ?? 35,
       patient_gender: full.patient_gender || 'male',
       expected_duration_minutes: full.expected_duration_minutes ?? 15,
@@ -1533,6 +1627,37 @@ function CasePanel({ api, addToast }) {
 
   const handleSaveCase = async (e) => {
     e.preventDefault();
+    if (!editingCase?.id) {
+      const topicId = String(caseForm.topic_id || '').trim();
+      const topic = String(caseForm.topic || '').trim();
+      if (!topicId && !topic) {
+        setCreateErr("Mavzuni tanlang yoki matn yozing");
+        return;
+      }
+      const payload = { difficulty: caseForm.difficulty || 'medium' };
+      if (topicId) payload.topic_id = topicId;
+      if (topic) payload.topic = topic;
+      const complaint = String(caseForm.complaint || '').trim();
+      if (complaint) payload.chief_complaint = { uz: complaint };
+      const answer = String(caseForm.expected_answer || '').trim();
+      if (answer) payload.expected_answer = answer;
+      const cover = String(caseForm.cover_image_url || '').trim();
+      if (cover) payload.cover_image_url = cover;
+      setCreating(true);
+      setCreateErr('');
+      try {
+        await api('/web/case', { method: 'POST', body: payload, timeoutMs: 5 * 60 * 1000 });
+        addToast("Case qoralamasi yaratildi (draft)", "ok");
+        setIsCaseModalOpen(false);
+        load();
+      } catch (err) {
+        setCreateErr(err?.message || "Noma'lum xatolik");
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+
     let parsedScenario = {};
     try {
       parsedScenario = JSON.parse(caseForm.scenario || '{}');
@@ -1541,17 +1666,33 @@ function CasePanel({ api, addToast }) {
       return;
     }
 
-    const matchedTopic = topics.find(t => t.value === caseForm.topic_id);
-    const resolvedCatId = caseForm.category_id || matchedTopic?.category_id || (categories[0]?.value ?? '');
+    const mlOrOmit = (obj) => {
+      const o = { uz: obj?.uz || '', ru: obj?.ru || '', en: obj?.en || '' };
+      if (!o.uz.trim() && !o.ru.trim() && !o.en.trim()) return null;
+      return o;
+    };
+    const attemptsNum = caseForm.max_attempts === '' || caseForm.max_attempts === null || caseForm.max_attempts === undefined
+      ? NaN
+      : Number(caseForm.max_attempts);
 
     const payload = {
-      ...caseForm,
-      category_id: resolvedCatId || undefined,
-      scenario: parsedScenario,
+      topic_id: caseForm.topic_id,
+      difficulty: caseForm.difficulty,
+      chief_complaint: {
+        uz: caseForm.chief_complaint?.uz || '',
+        ru: caseForm.chief_complaint?.ru || '',
+        en: caseForm.chief_complaint?.en || ''
+      },
+      expected_answer: caseForm.expected_answer || '',
+      cover_image_url: caseForm.cover_image_url || '',
       patient_age: Number(caseForm.patient_age) || 0,
+      patient_gender: caseForm.patient_gender,
       expected_duration_minutes: Number(caseForm.expected_duration_minutes) || 0,
+      visual_state: caseForm.visual_state || '',
+      scenario: parsedScenario,
       order_num: Number(caseForm.order_num) || 0,
       is_ai_generated: !!caseForm.is_ai_generated,
+      max_attempts: Number.isFinite(attemptsNum) ? attemptsNum : 0,
       initial_vitals: {
         hr: Number(caseForm.initial_vitals?.hr) || 80,
         bp: String(caseForm.initial_vitals?.bp || '120/80'),
@@ -1561,15 +1702,14 @@ function CasePanel({ api, addToast }) {
         gcs: Number(caseForm.initial_vitals?.gcs) || 15
       }
     };
+    const title = mlOrOmit(caseForm.title);
+    const subtitle = mlOrOmit(caseForm.subtitle);
+    if (title) payload.title = title;
+    if (subtitle) payload.subtitle = subtitle;
 
     try {
-      if (editingCase?.id) {
-        await api(`/web/case/${editingCase.id}/update`, { method: 'PUT', body: payload });
-        addToast("Case saqlandi", "ok");
-      } else {
-        await api('/web/case', { method: 'POST', body: payload });
-        addToast("Case yaratildi", "ok");
-      }
+      await api(`/web/case/${editingCase.id}/update`, { method: 'PUT', body: payload });
+      addToast("Case saqlandi", "ok");
       setIsCaseModalOpen(false);
       load();
     } catch {}
@@ -1659,7 +1799,7 @@ function CasePanel({ api, addToast }) {
         </div>
         <button onClick={() => { setPage(1); load(); }}>🔍 Qidirish</button>
         <button className="primary" onClick={handleOpenCreateCase}>+ Yangi</button>
-        <button className="primary" onClick={() => { setAiGenErr(''); setIsAiGenOpen(true); }}>🤖 AI bilan yaratish</button>
+        <button className="primary" onClick={() => { resetAiBatchForm(); setIsAiBatchOpen(true); }}>🤖 Ommaviy AI generatsiya</button>
         <button className="primary" disabled={importing} onClick={() => importInputRef.current?.click()}>
           {importing ? '⏳ Yuklanmoqda...' : '📥 Excel/CSV yuklash'}
         </button>
@@ -1694,7 +1834,7 @@ function CasePanel({ api, addToast }) {
             {cases.map(c => (
               <tr key={c.id}>
                 <td>{c.id}</td>
-                <td>{fmtCell(c.title)}</td>
+                <td>{c.title && (c.title.uz || c.title.ru || c.title.en) ? fmtCell(c.title) : `Keys #${c.id}`}</td>
                 <td><span className="pill">{c.difficulty}</span></td>
                 <td>
                   <span className={`pill ${c.status === 'published' ? 'ok' : ''}`}>
@@ -1768,57 +1908,114 @@ function CasePanel({ api, addToast }) {
         </div>
       )}
 
-      {/* AI Gen Modal */}
-      {isAiGenOpen && (
-        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsAiGenOpen(false); }}>
+
+      {isAiBatchOpen && (
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !batchGenerating) setIsAiBatchOpen(false); }}>
           <div className="modal">
-            <h3>AI yordamida case generatsiyasi</h3>
-            <form onSubmit={handleAiGenSubmit}>
-              {aiGenErr && (
+            <h3>Ommaviy AI generatsiya</h3>
+            <form onSubmit={handleAiBatchSubmit}>
+              {aiBatchErr && (
                 <div style={{ color: '#fca5a5', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', maxHeight: '160px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  <strong>Server xatosi:</strong> {aiGenErr}
+                  <strong>Xato:</strong> {aiBatchErr}
                 </div>
               )}
               <div className="field">
-                <label>Mavzu (matn) *</label>
-                <input
-                  type="text"
-                  required
-                  value={aiGenTopic}
-                  onChange={(e) => setAiGenTopic(e.target.value)}
-                  placeholder="Masalan: O'tkir appenditsit"
-                />
-              </div>
-              <div className="field">
-                <label>Qiyinlik</label>
-                <select value={aiGenDiff} onChange={(e) => setAiGenDiff(e.target.value)}>
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
+                <label>Bo'lim</label>
+                <select
+                  value={aiBatchCategoryId}
+                  onChange={(e) => { setAiBatchCategoryId(e.target.value); setAiBatchTopicIds([]); }}
+                  disabled={aiBatchTopicIds.length > 0}
+                >
+                  <option value="">— tanlang —</option>
+                  {categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
+                <div className="muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                  Mavzu tanlansa bo'lim e'tiborga olinmaydi.
+                </div>
               </div>
               <div className="field">
-                <label>Bemor shikoyati (ixtiyoriy)</label>
-                <textarea
-                  rows={3}
-                  value={aiGenComplaint}
-                  onChange={(e) => setAiGenComplaint(e.target.value)}
-                  placeholder="Bemor nimadan shikoyat qilmoqda..."
-                />
+                <label>Aniq mavzular (ixtiyoriy)</label>
+                <div style={{ maxHeight: '140px', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px' }}>
+                  {topics.length === 0 ? (
+                    <p className="muted">Mavzu topilmadi.</p>
+                  ) : topics.map(t => (
+                    <label key={t.value} className="checkRow" style={{ marginBottom: '6px' }}>
+                      <input
+                        type="checkbox"
+                        checked={aiBatchTopicIds.includes(t.value)}
+                        onChange={() => setAiBatchTopicIds(toggleSourceId(aiBatchTopicIds, t.value))}
+                      />
+                      <span>{t.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
+              <div className="formGrid">
+                <div className="field">
+                  <label>Qiyinlik</label>
+                  <select value={aiBatchDiff} onChange={(e) => setAiBatchDiff(e.target.value)}>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Har mavzuga nechta</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={aiBatchCount}
+                    onChange={(e) => setAiBatchCount(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                </div>
+              </div>
+              <p className="muted" style={{ fontSize: '12px', margin: '0 0 10px' }}>
+                Jami: {batchTotal} ta case (chegara: 20). Generatsiya ketma-ket, har case ~10–30 soniya.
+              </p>
               <div className="field">
-                <label>To'g'ri javob/tashxis (ixtiyoriy)</label>
-                <textarea
-                  rows={2}
-                  value={aiGenAnswer}
-                  onChange={(e) => setAiGenAnswer(e.target.value)}
-                  placeholder="Masalan: O'tkir appenditsit, flegmonoz bosqich"
-                />
+                <label>Ishonchli manbalar</label>
+                <div className="muted" style={{ fontSize: '11px', marginBottom: '6px' }}>
+                  Hech biri tanlanmasa bazadagi barcha manbalar ishlatiladi.
+                </div>
+                {sources.length === 0 ? (
+                  <p className="muted">Manba yo'q — bo'sh qoldirish mumkin.</p>
+                ) : (
+                  <div style={{ maxHeight: '140px', overflow: 'auto', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px' }}>
+                    {sources.map(s => (
+                      <label key={s.id} className="checkRow" style={{ marginBottom: '6px' }}>
+                        <input
+                          type="checkbox"
+                          checked={aiBatchSourceIds.includes(s.id)}
+                          onChange={() => setAiBatchSourceIds(toggleSourceId(aiBatchSourceIds, s.id))}
+                        />
+                        <span>{s.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
+              {aiBatchResult && (
+                <div style={{ background: 'var(--panel2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '10px', marginBottom: '12px', fontSize: '12px' }}>
+                  <div>Yaratildi: <strong>{aiBatchResult.created ?? 0}</strong> · Xato: <strong>{aiBatchResult.failed ?? 0}</strong></div>
+                  {(aiBatchResult.items || []).length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
+                      {aiBatchResult.items.map((it, idx) => (
+                        <li key={it.case_id || `${it.topic_id}-${idx}`}>
+                          {it.case_id
+                            ? `case ${it.case_id}`
+                            : (it.error || 'xato')}
+                          {it.topic_id ? ` — topic ${it.topic_id}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               <div className="modalFooter">
-                <button type="button" onClick={() => setIsAiGenOpen(false)}>Bekor qilish</button>
-                <button type="submit" className="primary" disabled={generating}>
-                  {generating ? "Yaratilmoqda..." : "Yaratish"}
+                <button type="button" disabled={batchGenerating} onClick={() => setIsAiBatchOpen(false)}>Yopish</button>
+                <button type="submit" className="primary" disabled={batchGenerating || batchTotal > 20}>
+                  {batchGenerating ? "Yaratilmoqda..." : "Yaratish"}
                 </button>
               </div>
             </form>
@@ -1828,10 +2025,92 @@ function CasePanel({ api, addToast }) {
 
       {/* Full Case Modal */}
       {isCaseModalOpen && (
-        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsCaseModalOpen(false); }}>
-          <div className="modal" style={{ width: '700px' }}>
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !creating) setIsCaseModalOpen(false); }}>
+          <div className="modal" style={editingCase ? { width: '700px' } : undefined}>
             <h3>{editingCase ? "Case tahrirlash" : "Yangi Case"}</h3>
             <form onSubmit={handleSaveCase}>
+              {!editingCase && (
+                <>
+                  {createErr && (
+                    <div style={{ color: '#fca5a5', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', maxHeight: '160px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      <strong>Xato:</strong> {createErr}
+                    </div>
+                  )}
+                  <div className="field">
+                    <label>Mavzu (ro'yxatdan)</label>
+                    <select
+                      value={caseForm.topic_id || ''}
+                      onChange={(e) => setCaseForm({ ...caseForm, topic_id: e.target.value })}
+                    >
+                      <option value="">— tanlang —</option>
+                      {topics.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>yoki matn yozing</label>
+                    <input
+                      type="text"
+                      value={caseForm.topic || ''}
+                      onChange={(e) => setCaseForm({ ...caseForm, topic: e.target.value })}
+                      placeholder="Masalan: O'tkir appenditsit"
+                    />
+                    <div className="muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                      Mavzuni tanlang yoki matn yozing.
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label>Qiyinlik</label>
+                    <select
+                      value={caseForm.difficulty || 'medium'}
+                      onChange={(e) => setCaseForm({ ...caseForm, difficulty: e.target.value })}
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Muqova rasm</label>
+                    <div className="rowInline">
+                      <input
+                        type="text"
+                        value={caseForm.cover_image_url || ''}
+                        onChange={(e) => setCaseForm({ ...caseForm, cover_image_url: e.target.value })}
+                      />
+                      <UploadButton
+                        api={api}
+                        addToast={addToast}
+                        onDone={(url) => setCaseForm({ ...caseForm, cover_image_url: url })}
+                      />
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label>Bemor shikoyati (ixtiyoriy)</label>
+                    <textarea
+                      rows={3}
+                      value={caseForm.complaint || ''}
+                      onChange={(e) => setCaseForm({ ...caseForm, complaint: e.target.value })}
+                      placeholder="Bemor nimadan shikoyat qilmoqda..."
+                    />
+                    <div className="muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                      Matn o'zbekcha saqlanadi. Rus va ingliz tarjimasini AI to'ldiradi.
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label>To'g'ri javob (ixtiyoriy)</label>
+                    <textarea
+                      rows={2}
+                      value={caseForm.expected_answer || ''}
+                      onChange={(e) => setCaseForm({ ...caseForm, expected_answer: e.target.value })}
+                      placeholder="Masalan: O'tkir appenditsit"
+                    />
+                  </div>
+                  <p className="muted" style={{ fontSize: '12px', margin: '0 0 10px' }}>
+                    Sarlavha, bemor ma'lumoti, vitals va scenario bo'sh qolsa AI to'ldiradi. Case draft holatda yaratiladi.
+                  </p>
+                </>
+              )}
+              {editingCase && (
               <div className="formGrid">
                 <div className="field">
                   <label>Bo'lim (Category)</label>
@@ -1867,14 +2146,13 @@ function CasePanel({ api, addToast }) {
                 </div>
 
                 <div className="field full">
-                  <label>Sarlavha *</label>
+                  <label>Sarlavha (ixtiyoriy)</label>
                   <div className="mlWrap">
                     {['uz', 'ru', 'en'].map(l => (
                       <div key={l}>
                         <div className="lang">{l.toUpperCase()}</div>
                         <input
                           type="text"
-                          required={l === 'uz'}
                           value={caseForm.title?.[l] || ''}
                           onChange={(e) => setCaseForm({
                             ...caseForm,
@@ -1887,7 +2165,7 @@ function CasePanel({ api, addToast }) {
                 </div>
 
                 <div className="field full">
-                  <label>Kichik sarlavha (subtitle)</label>
+                  <label>Kichik sarlavha (subtitle, ixtiyoriy)</label>
                   <div className="mlWrap">
                     {['uz', 'ru', 'en'].map(l => (
                       <div key={l}>
@@ -1931,6 +2209,18 @@ function CasePanel({ api, addToast }) {
                     value={caseForm.expected_answer || ''}
                     onChange={(e) => setCaseForm({ ...caseForm, expected_answer: e.target.value })}
                   />
+                </div>
+
+                <div className="field">
+                  <label>Urinishlar limiti (max_attempts)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="1"
+                    value={caseForm.max_attempts ?? ''}
+                    onChange={(e) => setCaseForm({ ...caseForm, max_attempts: e.target.value })}
+                  />
+                  <small className="muted">Bo'sh/0 = default 1</small>
                 </div>
 
                 <div className="field">
@@ -2090,10 +2380,13 @@ function CasePanel({ api, addToast }) {
                   />
                 </div>
               </div>
+              )}
 
               <div className="modalFooter">
-                <button type="button" onClick={() => setIsCaseModalOpen(false)}>Bekor qilish</button>
-                <button type="submit" className="primary">Saqlash</button>
+                <button type="button" disabled={creating} onClick={() => setIsCaseModalOpen(false)}>Bekor qilish</button>
+                <button type="submit" className="primary" disabled={creating}>
+                  {creating ? "Yaratilmoqda..." : "Saqlash"}
+                </button>
               </div>
             </form>
           </div>
@@ -2645,6 +2938,7 @@ function CoinMonitoringPanel({ api }) {
             <option value="referral_reward">Referral</option>
             <option value="promo_redeem">Promokod</option>
             <option value="simulation_finish">Simulyatsiya</option>
+            <option value="ai_usage">AI token xarajati</option>
           </select>
         </div>
         <div className="field">
@@ -2688,7 +2982,7 @@ function CoinMonitoringPanel({ api }) {
                     <span style={{ color: '#f87171' }}>{t.delta}</span>
                   )}
                 </td>
-                <td><span className="pill">{fmtCell(t.reason)}</span></td>
+                <td><span className={`pill ${t.reason === 'ai_usage' ? 'ok' : ''}`}>{t.reason === 'ai_usage' ? '🤖 ai_usage' : fmtCell(t.reason)}</span></td>
                 <td>{fmtCell(t.reference_type)} {fmtCell(t.reference_id)}</td>
                 <td>{fmtCell(t.created_at)}</td>
               </tr>
@@ -3195,6 +3489,39 @@ function SettingsPanel({ api, addToast }) {
 
   const [diff, setDiff] = useState({ medium_multiplier: 1.5, hard_multiplier: 2 });
   const [savingDiff, setSavingDiff] = useState(false);
+  const [coinRate, setCoinRate] = useState(1);
+  const [savingRate, setSavingRate] = useState(false);
+  const [coinRateMissing, setCoinRateMissing] = useState(false);
+
+  const loadCoinRate = async () => {
+    try {
+      const res = await api('/web/setting/coin-rate', { silent: true });
+      setCoinRateMissing(false);
+      if (res && res.coins_per_1k_tokens !== undefined) setCoinRate(res.coins_per_1k_tokens);
+    } catch (err) {
+      if (err?.status === 404) setCoinRateMissing(true);
+    }
+  };
+
+  const handleSaveCoinRate = async (e) => {
+    e.preventDefault();
+    const rate = Number(coinRate);
+    if (isNaN(rate) || rate < 0) {
+      addToast("Tarif 0 yoki undan katta bo'lishi kerak", "err");
+      return;
+    }
+    setSavingRate(true);
+    try {
+      await api('/web/setting/coin-rate', {
+        method: 'PUT',
+        body: { coins_per_1k_tokens: rate }
+      });
+      addToast("Token-to-coin tarifi saqlandi", "ok");
+      loadCoinRate();
+    } catch {} finally {
+      setSavingRate(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -3220,6 +3547,7 @@ function SettingsPanel({ api, addToast }) {
   useEffect(() => {
     load();
     loadDiff();
+    loadCoinRate();
   }, []);
 
   const handleSaveDiff = async (e) => {
@@ -3291,6 +3619,36 @@ function SettingsPanel({ api, addToast }) {
           <div className="modalFooter">
             <button type="submit" className="primary" disabled={savingDiff}>
               {savingDiff ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
+        <h3 style={{ marginTop: 0 }}>AI Token-to-Coin tarifi</h3>
+        <p className="muted" style={{ marginBottom: '10px' }}>
+          /web/setting/coin-rate — 1 000 token uchun yechiladigan tanga (AI tannarxi + platforma xarajati + marja). Kasr mumkin; 0 = tanga yechilmaydi.
+        </p>
+        {coinRateMissing && (
+          <p className="muted" style={{ marginBottom: '10px' }}>
+            Server bu endpointni hali qaytarmayapti (404). Backend yangilangach saqlash ishlaydi.
+          </p>
+        )}
+        <form onSubmit={handleSaveCoinRate}>
+          <div className="field">
+            <label>Tanga / 1 000 token *</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              required
+              value={coinRate}
+              onChange={(e) => setCoinRate(e.target.value)}
+            />
+          </div>
+          <div className="modalFooter">
+            <button type="submit" className="primary" disabled={savingRate}>
+              {savingRate ? 'Saqlanmoqda...' : 'Saqlash'}
             </button>
           </div>
         </form>

@@ -27,24 +27,41 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
 
   // AI Gen state
   const [isAiGenOpen, setIsAiGenOpen] = useState(false);
+  const [aiGenTopicId, setAiGenTopicId] = useState('');
   const [aiGenTopic, setAiGenTopic] = useState('');
   const [aiGenDiff, setAiGenDiff] = useState('medium');
   const [aiGenComplaint, setAiGenComplaint] = useState('');
   const [aiGenAnswer, setAiGenAnswer] = useState('');
+  const [aiGenSourceIds, setAiGenSourceIds] = useState([]);
   const [aiGenErr, setAiGenErr] = useState('');
   const [generating, setGenerating] = useState(false);
+
+  // AI Batch state
+  const [isAiBatchOpen, setIsAiBatchOpen] = useState(false);
+  const [aiBatchCategoryId, setAiBatchCategoryId] = useState('');
+  const [aiBatchTopicIds, setAiBatchTopicIds] = useState([]);
+  const [aiBatchDiff, setAiBatchDiff] = useState('medium');
+  const [aiBatchCount, setAiBatchCount] = useState(1);
+  const [aiBatchSourceIds, setAiBatchSourceIds] = useState([]);
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [aiBatchResult, setAiBatchResult] = useState(null);
+  const [aiBatchErr, setAiBatchErr] = useState('');
+
+  const [sources, setSources] = useState([]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [casesRes, catsRes, topsRes] = await Promise.all([
+      const [casesRes, catsRes, topsRes, sourcesRes] = await Promise.all([
         DataService.getCases(),
         DataService.getCategories(),
-        DataService.getTopics()
+        DataService.getTopics(),
+        DataService.getCaseSources()
       ]);
       setCases(Array.isArray(casesRes) ? casesRes : []);
       setCategories(Array.isArray(catsRes) ? catsRes : []);
       setTopics(Array.isArray(topsRes) ? topsRes : []);
+      setSources(Array.isArray(sourcesRes) ? sourcesRes : []);
     } catch {
       setCases([]);
     } finally {
@@ -55,6 +72,10 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
   useEffect(() => {
     loadAll();
   }, []);
+
+  const toggleSourceId = (list, id) => {
+    return list.includes(id) ? list.filter(x => x !== id) : [...list, id];
+  };
 
   const filteredCases = cases.filter(c => {
     const titleMatch = (c.title?.[lang] || c.title?.uz || c.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -109,32 +130,82 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
 
   const handleAiGenSubmit = async (e) => {
     e.preventDefault();
-    if (!aiGenTopic.trim()) {
-      setAiGenErr("Mavzu matnini kiriting");
+    const topicText = aiGenTopic.trim();
+    if (!aiGenTopicId && !topicText) {
+      setAiGenErr("Mavzuni ro'yxatdan tanlang yoki matn yozing");
       return;
     }
     setGenerating(true);
     setAiGenErr('');
     try {
       const payload = {
-        topic: aiGenTopic.trim(),
         difficulty: aiGenDiff
       };
+      if (aiGenTopicId) payload.topic_id = aiGenTopicId;
+      if (topicText) payload.topic = topicText;
+      if (aiGenSourceIds.length) payload.source_ids = aiGenSourceIds;
       if (aiGenComplaint.trim()) payload.chief_complaint = aiGenComplaint.trim();
       if (aiGenAnswer.trim()) payload.expected_answer = aiGenAnswer.trim();
 
       await DataService.aiGenerateCase(payload);
       onShowToast("AI keys qoralamasi muvaffaqiyatli yaratildi!", "success");
       setIsAiGenOpen(false);
+      setAiGenTopicId('');
       setAiGenTopic('');
       setAiGenComplaint('');
       setAiGenAnswer('');
+      setAiGenSourceIds([]);
       loadAll();
     } catch (err) {
       setAiGenErr(err?.message || "AI generatsiyasida xatolik");
       onShowToast(err?.message || "AI keys generatsiyasida xatolik", "error");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const batchTopicCount = aiBatchTopicIds.length
+    ? aiBatchTopicIds.length
+    : (aiBatchCategoryId ? topics.filter(t => t.category_id === aiBatchCategoryId).length : 0);
+  const batchTotal = batchTopicCount * (Number(aiBatchCount) || 0);
+
+  const handleAiBatchSubmit = async (e) => {
+    e.preventDefault();
+    if (!aiBatchTopicIds.length && !aiBatchCategoryId) {
+      setAiBatchErr("Bo'lim tanlang yoki kamida bitta mavzu belgilang");
+      return;
+    }
+    if (batchTotal < 1) {
+      setAiBatchErr("Har mavzuga kamida 1 ta case kerak");
+      return;
+    }
+    if (batchTotal > 20) {
+      setAiBatchErr(`Jami so'raladigan case soni 20 tadan oshmasligi kerak (hozir: ${batchTotal})`);
+      return;
+    }
+    setBatchGenerating(true);
+    setAiBatchErr('');
+    setAiBatchResult(null);
+    try {
+      const body = {
+        difficulty: aiBatchDiff,
+        count_per_topic: Number(aiBatchCount) || 1
+      };
+      if (aiBatchTopicIds.length) body.topic_ids = aiBatchTopicIds;
+      else body.category_id = aiBatchCategoryId;
+      if (aiBatchSourceIds.length) body.source_ids = aiBatchSourceIds;
+
+      const res = await DataService.aiGenerateBatchCase(body);
+      setAiBatchResult(res || {});
+      if ((res?.created || 0) > 0) {
+        onShowToast(`${res.created} ta draft case yaratildi!`, "success");
+        loadAll();
+      }
+    } catch (err) {
+      setAiBatchErr(err?.message || "Ommaviy generatsiyada xatolik");
+      onShowToast(err?.message || "Ommaviy generatsiyada xatolik", "error");
+    } finally {
+      setBatchGenerating(false);
     }
   };
 
@@ -159,6 +230,17 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <span>🤖 AI bilan yaratish</span>
+          </button>
+          <button
+            onClick={() => {
+              setAiBatchErr('');
+              setAiBatchResult(null);
+              setIsAiBatchOpen(true);
+            }}
+            className="btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span>🤖 Ommaviy AI generatsiya</span>
           </button>
           <button
             onClick={() => {
@@ -254,7 +336,7 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
                 <tr key={c.id}>
                   <td>
                     <div style={{ fontWeight: '600', color: '#fff', fontSize: '0.88rem' }}>
-                      {c.title?.[lang] || c.title?.uz || c.title}
+                      {c.title?.[lang] || c.title?.uz || c.title || `Keys #${c.id}`}
                     </div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                       {c.subtitle?.[lang] || c.subtitle?.uz || ''}
@@ -344,12 +426,12 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
         lang={lang}
       />
 
-      {/* AI Case Generation Modal */}
+      {/* AI Case Generation Modal (Single) */}
       <Modal
         isOpen={isAiGenOpen}
         onClose={() => setIsAiGenOpen(false)}
         title="AI Yordamida Klinik Keys Yaratish (POST /web/case/ai-generate)"
-        maxWidth="540px"
+        maxWidth="580px"
       >
         <form onSubmit={handleAiGenSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {aiGenErr && (
@@ -368,17 +450,33 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
           )}
 
           <div className="form-group">
-            <label className="form-label">Mavzu (Topic / Tashxis) *:</label>
+            <label className="form-label">Mavzuni Ro'yxatdan Tanlang (topic_id):</label>
+            <select
+              className="form-select"
+              value={aiGenTopicId}
+              onChange={(e) => setAiGenTopicId(e.target.value)}
+            >
+              <option value="">— Mavzuni tanlang (ixtiyoriy) —</option>
+              {topics.map(t => (
+                <option key={t.id} value={t.id}>{t.name?.[lang] || t.name?.uz || t.name}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              Mavzu tanlansa, yaratilgan keys shu mavzuga biriktiriladi.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Yoki Mavzu Matnini Yozing (topic):</label>
             <input
               type="text"
               className="form-input"
-              required
               placeholder="Masalan: O'tkir appenditsit yoki Gipertonik kriz"
               value={aiGenTopic}
               onChange={(e) => setAiGenTopic(e.target.value)}
             />
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Gemini AI shu mavzuga mos to'liq klinik keys stsenariysi va bemor vitallarini generatsiya qiladi.
+              Mavzu tanlanmagan bo'lsa, ushbu matn bo'yicha keys tuziladi.
             </span>
           </div>
 
@@ -393,6 +491,29 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
               <option value="medium">Medium (O'rta)</option>
               <option value="hard">Hard (Qiyin)</option>
             </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Ishonchli Manbalar (ixtiyoriy):</label>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+              Hech biri tanlanmasa — bazadagi barcha manbalar ishlatiladi.
+            </div>
+            {sources.length === 0 ? (
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Bazada manbalar mavjud emas.</div>
+            ) : (
+              <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {sources.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={aiGenSourceIds.includes(s.id)}
+                      onChange={() => setAiGenSourceIds(toggleSourceId(aiGenSourceIds, s.id))}
+                    />
+                    <span>{s.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -431,6 +552,167 @@ export const CasesView = ({ onShowToast, lang = 'uz' }) => {
               className="btn-primary"
             >
               {generating ? "AI generatsiya qilmoqda..." : "🤖 Generatsiya qilish"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* AI Batch Generation Modal */}
+      <Modal
+        isOpen={isAiBatchOpen}
+        onClose={() => setIsAiBatchOpen(false)}
+        title="🤖 Ommaviy AI Case Generatsiyasi (POST /web/case/ai-generate-batch)"
+        maxWidth="640px"
+      >
+        <form onSubmit={handleAiBatchSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+            Butun bo'lim yoki tanlangan mavzular bo'yicha bir martada ko'plab draft keyslar yaratadi.
+          </p>
+
+          {aiBatchErr && (
+            <div style={{
+              color: '#fca5a5',
+              background: 'rgba(239,68,68,.12)',
+              border: '1px solid rgba(239,68,68,.4)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontSize: '0.8rem',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word'
+            }}>
+              <strong>Xatolik:</strong> {aiBatchErr}
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">Bo'lim bo'yicha generatsiya:</label>
+            <select
+              className="form-select"
+              value={aiBatchCategoryId}
+              onChange={(e) => {
+                setAiBatchCategoryId(e.target.value);
+                setAiBatchTopicIds([]);
+              }}
+            >
+              <option value="">— Bo'limni tanlang —</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>{c.name?.[lang] || c.name?.uz || c.name}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+              Quyida aniq mavzular tanlansa, bo'lim e'tiborga olinmaydi.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Yoki Aniq Mavzularni Tanlang:</label>
+            <div style={{ maxHeight: '130px', overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {(aiBatchCategoryId ? topics.filter(t => t.category_id === aiBatchCategoryId) : topics).map(t => (
+                <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={aiBatchTopicIds.includes(t.id)}
+                    onChange={() => setAiBatchTopicIds(toggleSourceId(aiBatchTopicIds, t.id))}
+                  />
+                  <span>{t.name?.[lang] || t.name?.uz || t.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-group">
+              <label className="form-label">Qiyinlik:</label>
+              <select
+                className="form-select"
+                value={aiBatchDiff}
+                onChange={(e) => setAiBatchDiff(e.target.value)}
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Har bir mavzuga nechta keys:</label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                className="form-input"
+                value={aiBatchCount}
+                onChange={(e) => setAiBatchCount(e.target.value === '' ? '' : Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <div style={{ padding: '8px 12px', background: 'var(--bg-input)', borderRadius: '6px', fontSize: '0.8rem', color: batchTotal > 20 ? '#fca5a5' : 'var(--text-secondary)' }}>
+            Jami so'raladigan keyslar soni: <strong>{batchTotal}</strong> ta (Chegara: 20 ta). Har bir keys ~10–30 soniya olishi mumkin.
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Ishonchli Manbalar:</label>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+              Hech biri tanlanmasa — bazadagi barcha manbalar ishlatiladi.
+            </div>
+            {sources.length === 0 ? (
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Bazada manbalar yo'q (bo'sh qoldirilishi mumkin).</div>
+            ) : (
+              <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {sources.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      checked={aiBatchSourceIds.includes(s.id)}
+                      onChange={() => setAiBatchSourceIds(toggleSourceId(aiBatchSourceIds, s.id))}
+                    />
+                    <span>{s.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {aiBatchResult && (
+            <div style={{
+              background: 'rgba(6,182,212,0.08)',
+              border: '1px solid rgba(6,182,212,0.3)',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '0.82rem'
+            }}>
+              <div style={{ color: '#fff', fontWeight: '700', marginBottom: '6px' }}>
+                Generatsiya natijasi: Yaratildi: <span style={{ color: '#4ade80' }}>{aiBatchResult.created ?? 0}</span> · Xato: <span style={{ color: '#f87171' }}>{aiBatchResult.failed ?? 0}</span>
+              </div>
+              {(aiBatchResult.items || []).length > 0 && (
+                <ul style={{ margin: 0, paddingLeft: '18px', color: 'var(--text-secondary)' }}>
+                  {aiBatchResult.items.map((it, idx) => (
+                    <li key={it.case_id || `${it.topic_id}-${idx}`}>
+                      {it.case_id ? `Case #${it.case_id} yaratildi` : (it.error || 'Xato')}
+                      {it.topic_id ? ` (mavzu: ${it.topic_id})` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+            <button
+              type="button"
+              disabled={batchGenerating}
+              onClick={() => setIsAiBatchOpen(false)}
+              className="btn-secondary"
+            >
+              Yopish
+            </button>
+            <button
+              type="submit"
+              disabled={batchGenerating || batchTotal < 1 || batchTotal > 20}
+              className="btn-primary"
+            >
+              {batchGenerating ? "Ketma-ket yaratilmoqda..." : "🚀 Ommaviy Yaratish"}
             </button>
           </div>
         </form>

@@ -58,8 +58,16 @@ ishlatilmaydi** — agar admin panelda shunday umumiy "bazaviy XP/coin" maydoni
 bo'lgan bo'lsa, uni olib tashlab, o'rniga yuqoridagi ikkita joyga (har-level
 forma + difficulty-reward forma) almashtiring.
 
+## Case urinishlar limiti (`max_attempts`)
+
+`POST/PUT /web/case` body va `GET /web/case*` javobida yangi maydon `max_attempts` (integer, default `10`):
+foydalanuvchi bitta sessiyada shu case'ga yubora oladigan xabarlar (`question`) soni, limitga yetsa sessiya yakunlanadi.
+Case formasiga raqam maydoni qo'shing (bo'sh/0 = default 10; `PUT` da 0 yuborilsa o'zgarmaydi). Fayldan yuklashda yangi
+ixtiyoriy `max_attempts` ustuni bor (shablon yangilangan).
+
 ## Tekshirish ro'yxati
 
 - [x] Level yaratish/tahrirlash formasiga `xp_reward`/`coin_reward` qo'shish
 - [x] Eski global "bazaviy XP/coin" sozlama maydoni bo'lsa — olib tashlash
 - [x] `medium_multiplier`/`hard_multiplier` sozlash formasi (Sozlamalar bo'limi)
+- [x] Case formasiga `max_attempts` maydoni (default 10)

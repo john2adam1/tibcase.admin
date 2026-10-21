@@ -423,27 +423,75 @@ BACKEND_STRUCTURE.md 2-bo'lim: tibbiy yo'nalishlar (Kardiologiya, Terapiya va h.
   - `expected_duration_minutes`: integer
   - `initial_vitals`: CaseVitals
   - `is_ai_generated`: boolean
+  - `max_attempts`: integer — bitta sessiyada `question` xabarlari limiti. Yangi case uchun default `1`. Bo'sh yoki `0` yuborilsa default qo'llanadi. `PUT` da `0` yuborilsa saqlangan qiymat o'zgarmaydi.
   - `order_num`: integer
   - `patient_age`: integer
   - `patient_gender`: string
   - `scenario`: object (key->object)
-  - `subtitle`: object (key->string)
-  - `title`: object (key->string)
+  - `subtitle`: object (key->string) — majburiy emas
+  - `title`: object (key->string) — majburiy emas
   - `topic_id`: string
   - `visual_state`: string
 **Javob (200):**
 `string`
 
+### `POST /web/case/import`
+**Excel/CSV dan case yuklash**
+- Auth: kerak (Bearer token)
+**Body:** `multipart/form-data`, maydon `file` (`.xlsx` yoki `.csv`)
+**Ustunlar:** `topic`, `title_uz`, `title_ru`, `title_en`, `difficulty`, `max_attempts` (`max_attempts` ixtiyoriy)
+**Javob (200):**
+  - `created`: integer
+  - `failed`: integer
+  - qator xatolari (bo'lsa)
+
 ### `POST /web/case/ai-generate`
 **AI yordamida keys yaratish (BACKEND_STRUCTURE.md 7-bo'lim)**
 - Auth: kerak (Bearer token)
-**Body** (CaseGenReq) (majburiy):
-  - `chief_complaint`: string
+**Body** (CaseGenReq):
+  - `topic_id`: string (ixtiyoriy) — mavzuni ro'yxatdan tanlash
+  - `topic`: string (ixtiyoriy) — `topic_id` yoki `topic` dan kamida bittasi
   - `difficulty`: string
-  - `expected_answer`: string
-  - `topic`: string
+  - `chief_complaint`: string (ixtiyoriy)
+  - `expected_answer`: string (ixtiyoriy)
+  - `source_ids`: string[] (ixtiyoriy; bo'sh — bazadagi barcha manbalar)
 **Javob (200):**
 `string`
+
+### `POST /web/case/ai-generate-batch`
+**Ommaviy AI case generatsiyasi**
+- Auth: kerak (Bearer token)
+**Body:**
+  - `category_id`: string — bo'lim (ichidagi barcha mavzular)
+  - `topic_ids`: string[] — aniq mavzular (berilsa `category_id` e'tiborga olinmaydi)
+  - `difficulty`: easy|medium|hard
+  - `count_per_topic`: integer (default 1)
+  - `source_ids`: string[] (ixtiyoriy; bo'sh — barcha manbalar)
+**Chegara:** mavzular × count_per_topic ≤ 20, aks holda 400.
+**Javob (200):**
+  - `created`: integer
+  - `failed`: integer
+  - `items`: massiv — `topic_id`, `case_id` yoki `error`
+
+### `GET /web/case-source`
+**Ishonchli manbalar (AI case uchun)**
+- Auth: kerak (Bearer token)
+**Query:** `name`, `limit`, `page`
+**Javob (200):** `sources[]` (`id`, `name`, `content`, `created_at`, `updated_at`), `count`
+
+### `POST /web/case-source`
+- Auth: kerak (Bearer token)
+**Body:** `name` (majburiy), `content` (majburiy — havola yoki matn)
+
+### `GET /web/case-source/{id}`
+- Auth: kerak (Bearer token)
+
+### `PUT /web/case-source/{id}/update`
+- Auth: kerak (Bearer token)
+**Body:** `name`, `content`
+
+### `DELETE /web/case-source/{id}/delete`
+- Auth: kerak (Bearer token)
 
 ### `GET /web/case/{id}`
 **Get case by ID (admin)**
@@ -462,6 +510,7 @@ BACKEND_STRUCTURE.md 2-bo'lim: tibbiy yo'nalishlar (Kardiologiya, Terapiya va h.
 - `id`: string
 - `initial_vitals`: CaseVitals
 - `is_ai_generated`: boolean
+- `max_attempts`: integer
 - `order_num`: integer
 - `patient_age`: integer
 - `patient_gender`: string
@@ -503,18 +552,28 @@ BACKEND_STRUCTURE.md 2-bo'lim: tibbiy yo'nalishlar (Kardiologiya, Terapiya va h.
   - `expected_duration_minutes`: integer
   - `id`: string
   - `initial_vitals`: CaseVitals
+  - `max_attempts`: integer — `0` yuborilsa o'zgarmaydi
   - `order_num`: integer
   - `patient_age`: integer
   - `patient_gender`: string
   - `scenario`: object (key->object)
-  - `subtitle`: object (key->string)
-  - `title`: object (key->string)
+  - `subtitle`: object (key->string) — majburiy emas
+  - `title`: object (key->string) — majburiy emas
   - `topic_id`: string
   - `visual_state`: string
 **Javob (200):**
 `string`
 
 ## Levellar (XP)
+
+Mukofot (case yakunida):
+
+```
+xp    = level.xp_reward   * qiyinlik_koeffitsienti * (final_score / 100)
+coins = level.coin_reward * qiyinlik_koeffitsienti * (final_score / 100)
+```
+
+`easy` = 1x. `medium` / `hard` — `GET/PUT /web/setting/difficulty-reward`. Global bazaviy XP/coin (`/web/setting`) endi ishlatilmaydi.
 
 ### `GET /web/level`
 - Auth: kerak (Bearer token)
@@ -837,11 +896,11 @@ Update tariff
 
 ### `GET /web/coin-transaction`
 **Tangalar savdosi monitoringi - tranzaksiyalar ro'yxati**
-point_transactions (kind=coin): coin_purchase, category_unlock, referral_reward, promo_redeem, simulation_finish va h.k.
+point_transactions (kind=coin): coin_purchase, category_unlock, referral_reward, promo_redeem, simulation_finish, ai_usage va h.k.
 - Auth: kerak (Bearer token)
 **Parametrlar:**
 - `user_id` (query, string): User ID bo'yicha filter
-- `reason` (query, string): Sabab bo'yicha filter (coin_purchase, referral_reward, ...)
+- `reason` (query, string): Sabab bo'yicha filter (coin_purchase, referral_reward, ai_usage, ...)
 - `from` (query, string): 2024-06-01
 - `to` (query, string): 2024-06-30
 - `page` (query, integer): Page
@@ -878,6 +937,8 @@ Sotib olingan, ishlab topilgan, sarflangan va aylanmadagi jami tanga
   - `medium_multiplier`: number (default 1.5)
   - `hard_multiplier`: number (default 2)
 
+Yakuniy XP/coin = level bazasi × shu koeffitsient × (final_score / 100). Easy har doim 1x.
+
 ### `PUT /web/setting/difficulty-reward`
 - Auth: kerak (Bearer token)
 **Body:**
@@ -891,6 +952,28 @@ Sotib olingan, ishlab topilgan, sarflangan va aylanmadagi jami tanga
   - `value`: string
 **Javob (200):**
 `string`
+
+### `GET /web/setting/coin-rate`
+**AI Token-to-Coin tarifi (1000 token uchun tanga miqdori)**
+- Auth: kerak (Bearer token)
+**Javob (200):**
+```json
+{
+  "coins_per_1k_tokens": 1
+}
+```
+
+### `PUT /web/setting/coin-rate`
+- Auth: kerak (Bearer token)
+**Body:**
+```json
+{
+  "coins_per_1k_tokens": 1.5
+}
+```
+*Izoh: `coins_per_1k_tokens` >= 0 bo'lgan kasr yoki butun son. 0 bo'lsa tanga yechilmaydi. Eski qat'iy `case_coin_cost` ("1 case = X tanga") bekor qilingan — o'rniga shu tarif.*
+**Javob (200):**
+`string` (yoki muvaffaqiyatli saqlangan tarif)
 
 ## Bildirishnomalar
 
@@ -1327,3 +1410,25 @@ File upload
 - `file` (formData, file) (majburiy): File
 **Javob (200):**
 `string`
+
+## Mobil / user-app (CHANGES_FRONTEND_TOKEN_BILLING)
+
+Admin paneli bu endpointlarni chaqirmaydi. Kontrakt shu yerda, user-app uchun.
+
+### Sessiya to'lovi
+
+- Limit status javobida `case_coin_cost` o'rniga `coins_per_1k_tokens` (qiymat `GET /web/setting/coin-rate` dagi tarif).
+- Simulyatsiya start: kunlik limit tugagan va `use_coins: true` bo'lsa sessiya tanga hisobidan boshlanadi. Oldindan narx yechilmaydi. Balans `> 0` bo'lishi kerak, aks holda `insufficient_coins`. Premium va bepul urinishda tanga yechilmaydi.
+- Har AI chaqiruvidan keyin (prompt + completion, ovoz va debrief ham) `ceil(tokens / 1000 * coins_per_1k_tokens)` tanga yechiladi. Balansdan ortiq yechilmaydi. Balans 0 bo'lsa keyingi event `insufficient_coins`.
+- Event va finish javoblari: `tokens_used`, `coins_spent` (sessiya bo'yicha jami).
+- Balans tarixi: `reason = ai_usage`.
+
+### `GET /mobile/case/random`
+
+Mavzu bo'yicha tasodifiy case ("Keyingi").
+
+**Query:**
+- `topic_id`: string
+- `exclude_id`: string — joriy case, takrorlanmaydi
+
+`topic_id` berilsa yechilmagan case'lar birinchi. Hammasi yechilgan bo'lsa ham case qaytadi.

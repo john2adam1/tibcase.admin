@@ -479,6 +479,9 @@ function openModal({title, fields, values, onSubmit, refData}){
     const out = {};
     try{
       fields.forEach((f, i) => setPath(out, f.name, wraps[i]._getValue()));
+      fields.forEach(f => {
+        if(f.showIf && !f.showIf(out) && !f.name.includes('.')) delete out[f.name];
+      });
     }catch(e){
       toast(e.message, 'err');
       return;
@@ -547,6 +550,9 @@ async function loadRefOptions(kind){
       items = extractList(r).items.map(x => ({value:x.id, label: x.name || x.id}));
     } else if(kind === 'tariff'){
       const r = await api('/web/tariff');
+      items = extractList(r).items.map(x => ({value:x.id, label: x.name || x.id}));
+    } else if(kind === 'case_source'){
+      const r = await api('/web/case-source', {query:{limit:200,page:1}});
       items = extractList(r).items.map(x => ({value:x.id, label: x.name || x.id}));
     }
   }catch(e){ items = []; }
@@ -660,8 +666,9 @@ const MODULES = {
     columns:['id','title','topic_id','difficulty','status','patient_age','created_at'],
     fields:[
       {name:'topic_id', label:'Mavzu', type:'select', asyncOptions:'topic', required:true},
-      {name:'title', label:'Sarlavha', type:'ml', required:true},
-      {name:'subtitle', label:'Kichik sarlavha', type:'ml'},
+      {name:'title', label:'Sarlavha (ixtiyoriy)', type:'ml'},
+      {name:'subtitle', label:'Kichik sarlavha (ixtiyoriy)', type:'ml'},
+      {name:'max_attempts', label:'Urinishlar limiti (bo\'sh = 1, tahrirda 0 = o\'zgarmaydi)', type:'number'},
       {name:'chief_complaint', label:'Chief complaint (shikoyat)', type:'ml', textarea:true},
       {name:'expected_answer', label:'Kutilgan javob', type:'textarea'},
       {name:'cover_image_url', label:'Muqova rasm', type:'file'},
@@ -679,6 +686,40 @@ const MODULES = {
       {name:'scenario', label:'Scenario (JSON, AI uchun erkin tuzilma)', type:'json', full:true, rows:8, jsonDefault:{}},
       {name:'order_num', label:'Tartib raqami', type:'number'},
     ],
+    createFields:[
+      {name:'topic_id', label:'Mavzu (ro\'yxatdan)', type:'select', asyncOptions:'topic', includeEmpty:true, emptyLabel:'— tanlang —'},
+      {name:'topic', label:'yoki matn yozing', type:'text'},
+      {name:'difficulty', label:'Qiyinlik', type:'select', options:[{value:'easy',label:'Easy'},{value:'medium',label:'Medium'},{value:'hard',label:'Hard'}]},
+      {name:'cover_image_url', label:'Muqova rasm', type:'file'},
+      {name:'chief_complaint', label:'Bemor shikoyati (ixtiyoriy, o\'zbekcha)', type:'textarea'},
+      {name:'expected_answer', label:'To\'g\'ri javob (ixtiyoriy)', type:'textarea'},
+    ],
+    createValues:{difficulty:'medium'},
+    beforeCreate:(body)=>{
+      const topicId = String(body.topic_id || '').trim();
+      const topic = String(body.topic || '').trim();
+      if(!topicId && !topic){
+        toast('Mavzuni tanlang yoki matn yozing', 'err');
+        throw new Error('topic required');
+      }
+      if(topicId) body.topic_id = topicId; else delete body.topic_id;
+      if(topic) body.topic = topic; else delete body.topic;
+      const complaint = String(body.chief_complaint || '').trim();
+      if(complaint) body.chief_complaint = {uz: complaint};
+      else delete body.chief_complaint;
+      const answer = String(body.expected_answer || '').trim();
+      if(answer) body.expected_answer = answer; else delete body.expected_answer;
+      const cover = String(body.cover_image_url || '').trim();
+      if(cover) body.cover_image_url = cover; else delete body.cover_image_url;
+      if(!body.difficulty) body.difficulty = 'medium';
+    },
+    prepareBody:(body, isEdit)=>{
+      const emptyMl = (o) => !o || ['uz','ru','en'].every(l => !String(o[l] || '').trim());
+      if(emptyMl(body.title)) delete body.title;
+      if(emptyMl(body.subtitle)) delete body.subtitle;
+      const n = Number(body.max_attempts);
+      body.max_attempts = isEdit ? (Number.isFinite(n) ? n : 0) : (n > 0 ? n : 1);
+    },
     canCreate:true, canUpdate:true, canDelete:true,
     onSaved:()=>invalidateRef('topic'),
     rowActions:(row, refresh)=>{
@@ -734,26 +775,37 @@ const MODULES = {
       return actions;
     },
     extraToolbar:(refresh)=>{
-      const b = document.createElement('button'); b.className='primary'; b.textContent='🤖 AI bilan yaratish';
-      b.onclick = ()=>{
+      const batchBtn = document.createElement('button'); batchBtn.className='primary'; batchBtn.textContent='🤖 Ommaviy AI generatsiya';
+      batchBtn.onclick = ()=>{
         openModal({
-          title:'AI yordamida case generatsiyasi',
+          title:'Ommaviy AI case generatsiyasi (ai-generate-batch)',
           fields:[
-            {name:'topic', label:'Mavzu (matn)', type:'text', required:true},
+            {name:'category_id', label:'Bo\'lim', type:'select', asyncOptions:'category', required:true},
             {name:'difficulty', label:'Qiyinlik', type:'select', options:[{value:'easy',label:'Easy'},{value:'medium',label:'Medium'},{value:'hard',label:'Hard'}]},
-            {name:'chief_complaint', label:'Bemor shikoyati (ixtiyoriy - AI shu asosda quradi)', type:'textarea'},
-            {name:'expected_answer', label:'To\'g\'ri javob/tashxis (ixtiyoriy - aynan shu saqlanadi)', type:'textarea'},
+            {name:'count_per_topic', label:'Har mavzuga nechta case (default 1, jami max 20)', type:'number', required:true},
           ],
-          values:{},
+          values:{count_per_topic:1},
           onSubmit: async (body)=>{
-            await api('/web/case/ai-generate', {method:'POST', body});
-            toast('AI case qoralamasi yaratildi (draft) — ro\'yxatdan ko\'rib chiqing', 'ok');
+            const cnt = Number(body.count_per_topic) || 1;
+            const res = await api('/web/case/ai-generate-batch', {method:'POST', body:{category_id:body.category_id, difficulty:body.difficulty, count_per_topic:cnt}});
+            toast('Yaratildi: '+(res.created||0)+', Xato: '+(res.failed||0), 'ok');
             refresh();
           }
         });
       };
-      return [b];
+      return [batchBtn];
     }
+  },
+  case_source: {
+    label:'Ishonchli manbalar', base:'/web/case-source', listKey:'sources',
+    search:[{name:'name', label:'Nomi (qidiruv)', type:'text'}],
+    columns:['id','name','content','created_at'],
+    fields:[
+      {name:'name', label:'Nomi', type:'text', required:true},
+      {name:'content', label:'Veb-havola (http/https) yoki matn parchasi', type:'textarea', full:true, rows:8, required:true},
+    ],
+    canCreate:true, canUpdate:true, canDelete:true,
+    onSaved:()=>invalidateRef('case_source'),
   },
   partner: {
     label:'Hamkorlar', base:'/web/partner', listKey:'partners',
@@ -851,7 +903,7 @@ const MODULES = {
 async function resolveOptions(f){
   let opts = f.options ? f.options.slice() : [];
   if(f.asyncOptions) opts = (await loadRefOptions(f.asyncOptions)).slice();
-  if(f.includeEmpty) opts = [{value:'', label:'— hammasi —'}].concat(opts);
+  if(f.includeEmpty) opts = [{value:'', label: f.emptyLabel || '— hammasi —'}].concat(opts);
   return opts;
 }
 
@@ -910,15 +962,18 @@ async function renderGenericModule(key){
   }
 
   async function openCreate(){
-    const refFields = await Promise.all(cfg.fields.map(async f=>{
+    const srcFields = cfg.createFields || cfg.fields;
+    const refFields = await Promise.all(srcFields.map(async f=>{
       if(f.asyncOptions){ const nf = Object.assign({}, f); nf.options = await resolveOptions(f); nf.type='select'; return nf; }
       return f;
     }));
     openModal({
       title: 'Yangi: ' + cfg.label,
       fields: refFields,
-      values: {},
+      values: cfg.createValues || {},
       onSubmit: async (body)=>{
+        if(cfg.beforeCreate) cfg.beforeCreate(body);
+        else if(cfg.prepareBody) cfg.prepareBody(body, false);
         await api(cfg.base, {method:'POST', body});
         toast('Yaratildi', 'ok');
         if(cfg.onSaved) cfg.onSaved();
@@ -942,6 +997,7 @@ async function renderGenericModule(key){
       fields: refFields,
       values,
       onSubmit: async (body)=>{
+        if(cfg.prepareBody) cfg.prepareBody(body, true);
         await api(cfg.base + '/' + row.id + '/update', {method:'PUT', body});
         toast('Saqlandi', 'ok');
         if(cfg.onSaved) cfg.onSaved();
@@ -1233,7 +1289,7 @@ async function renderCoinMonitoring(){
 
   const toolbar = document.createElement('div'); toolbar.className='toolbar';
   const reasonSel = document.createElement('select');
-  [['','— barcha sabablar —'],['coin_purchase','Tanga sotib olish'],['category_unlock','Bo\'lim ochish'],['referral_reward','Referral'],['promo_redeem','Promokod'],['simulation_finish','Simulyatsiya']].forEach(([v,l])=>{
+  [['','— barcha sabablar —'],['coin_purchase','Tanga sotib olish'],['category_unlock','Bo\'lim ochish'],['referral_reward','Referral'],['promo_redeem','Promokod'],['simulation_finish','Simulyatsiya'],['ai_usage','AI token xarajati']].forEach(([v,l])=>{
     const o=document.createElement('option'); o.value=v; o.textContent=l; reasonSel.appendChild(o);
   });
   const userI = document.createElement('input'); userI.placeholder='User ID';
@@ -1468,6 +1524,31 @@ async function renderSettings(){
         rewardInputs.medium_multiplier.value = r.medium_multiplier;
         rewardInputs.hard_multiplier.value = r.hard_multiplier;
       }
+    }catch(e){}
+  })();
+
+  const coinRateCard = document.createElement('div'); coinRateCard.className='card'; coinRateCard.style.marginBottom='16px';
+  coinRateCard.innerHTML = '<h3 style="margin-top:0">AI Token-to-Coin tarifi</h3><p class="muted" style="margin-bottom:10px">/web/setting/coin-rate — 1 000 token uchun yechiladigan tanga (AI tannarxi + platforma xarajati + marja). 0 = tanga yechilmaydi.</p>';
+  const coinRateField = document.createElement('div'); coinRateField.className='field';
+  const coinRateLabel = document.createElement('label'); coinRateLabel.textContent='Tanga / 1 000 token *';
+  const coinRateInput = document.createElement('input'); coinRateInput.type='number'; coinRateInput.step='0.1'; coinRateInput.min='0'; coinRateInput.value='1';
+  coinRateField.appendChild(coinRateLabel); coinRateField.appendChild(coinRateInput); coinRateCard.appendChild(coinRateField);
+  const coinRateSaveBtn = document.createElement('button'); coinRateSaveBtn.className='primary'; coinRateSaveBtn.style.marginTop='10px';
+  coinRateSaveBtn.textContent = '💾 Tarifni saqlash';
+  coinRateSaveBtn.onclick = async()=>{
+    const val = Number(coinRateInput.value);
+    if(isNaN(val) || val < 0){ toast('Tarif 0 yoki undan katta son bo\'lishi kerak','err'); return; }
+    try{
+      await api('/web/setting/coin-rate', {method:'PUT', body:{coins_per_1k_tokens:val}});
+      toast('Token-to-coin tarifi saqlandi','ok');
+    }catch(e){}
+  };
+  coinRateCard.appendChild(coinRateSaveBtn);
+  main.appendChild(coinRateCard);
+  (async()=>{
+    try{
+      const r = await api('/web/setting/coin-rate');
+      if(r && r.coins_per_1k_tokens !== undefined) coinRateInput.value = r.coins_per_1k_tokens;
     }catch(e){}
   })();
 
@@ -1739,6 +1820,7 @@ const NAV = [
     {key:'category', label:'📁 Bo\'limlar', render: ()=>renderGenericModule('category')},
     {key:'topic', label:'📑 Mavzular', render: ()=>renderGenericModule('topic')},
     {key:'case', label:'🧠 Case\'lar', render: ()=>renderGenericModule('case')},
+    {key:'case_source', label:'📚 Ishonchli manbalar', render: ()=>renderGenericModule('case_source')},
     {key:'level', label:'🏅 Levellar', render: ()=>renderGenericModule('level')},
     {key:'ai_prompt', label:'🤖 AI Promptlar', render: renderAIPrompt},
   ]},

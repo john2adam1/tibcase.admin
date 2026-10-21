@@ -14,6 +14,11 @@ export const SettingsView = ({ onShowToast }) => {
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [savingDiff, setSavingDiff] = useState(false);
 
+  // Token-to-Coin Rate
+  const [coinRate, setCoinRate] = useState(1);
+  const [loadingCoinRate, setLoadingCoinRate] = useState(false);
+  const [savingCoinRate, setSavingCoinRate] = useState(false);
+
   // App Settings (Key/Value)
   const [appSettings, setAppSettings] = useState([]);
   const [loadingSettings, setLoadingSettings] = useState(false);
@@ -51,6 +56,20 @@ export const SettingsView = ({ onShowToast }) => {
     }
   };
 
+  const loadCoinRate = async () => {
+    setLoadingCoinRate(true);
+    try {
+      const res = await DataService.getCoinRate();
+      if (res && res.coins_per_1k_tokens !== undefined) {
+        setCoinRate(res.coins_per_1k_tokens);
+      }
+    } catch {
+      // default kept
+    } finally {
+      setLoadingCoinRate(false);
+    }
+  };
+
   const loadAppSettings = async () => {
     setLoadingSettings(true);
     try {
@@ -65,6 +84,7 @@ export const SettingsView = ({ onShowToast }) => {
 
   useEffect(() => {
     loadDifficulty();
+    loadCoinRate();
     loadAppSettings();
   }, []);
 
@@ -90,6 +110,27 @@ export const SettingsView = ({ onShowToast }) => {
       onShowToast(err.message || "Koeffitsientlarni saqlashda xatolik", "error");
     } finally {
       setSavingDiff(false);
+    }
+  };
+
+  const handleSaveCoinRate = async (e) => {
+    e.preventDefault();
+    const rate = parseFloat(coinRate);
+
+    if (isNaN(rate) || rate < 0) {
+      onShowToast("Tarif 0 yoki undan katta son bo'lishi kerak!", "error");
+      return;
+    }
+
+    setSavingCoinRate(true);
+    try {
+      await DataService.updateCoinRate(rate);
+      onShowToast("Token-to-coin tarifi muvaffaqiyatli saqlandi!", "success");
+      loadCoinRate();
+    } catch (err) {
+      onShowToast(err.message || "Tarifni saqlashda xatolik", "error");
+    } finally {
+      setSavingCoinRate(false);
     }
   };
 
@@ -270,6 +311,50 @@ export const SettingsView = ({ onShowToast }) => {
                 style={{ padding: '8px 18px', fontSize: '0.85rem' }}
               >
                 {savingDiff ? "Saqlanmoqda..." : "Koeffitsientlarni Saqlash"}
+              </button>
+            </form>
+          </div>
+
+          {/* Card: Token-to-Coin Tariff */}
+          <div className="glass-panel" style={{ padding: '20px', maxWidth: '680px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <Icon name="coins" size={18} color="var(--accent-cyan)" />
+              <h3 style={{ fontSize: '1rem', color: '#fff', fontWeight: '700', margin: 0 }}>
+                AI Token-to-Coin Tarifi
+              </h3>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              /web/setting/coin-rate — Har 1 000 token (prompt + completion + debrief) uchun yechiladigan tanga miqdori.
+              <br />
+              Qiymat = AI tannarxi + platforma xarajati + marja. Kasr sonlar (masalan: 1.5) qabul qilinadi. <code>0</code> = tanga yechilmaydi.
+            </p>
+
+            <form onSubmit={handleSaveCoinRate}>
+              <div style={{ maxWidth: '320px', marginBottom: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Tanga / 1 000 token *:</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    className="form-input"
+                    required
+                    value={coinRate}
+                    onChange={(e) => setCoinRate(e.target.value)}
+                  />
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Standart: 1.0 (0 bo'lsa tekin)
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingCoinRate || loadingCoinRate}
+                className="btn-primary"
+                style={{ padding: '8px 18px', fontSize: '0.85rem' }}
+              >
+                {savingCoinRate ? "Saqlanmoqda..." : "Tarifni Saqlash"}
               </button>
             </form>
           </div>

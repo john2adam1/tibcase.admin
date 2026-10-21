@@ -17,6 +17,7 @@ export const Sidebar = ({ activeTab, setActiveTab, lang, setLang }) => {
       title: "TIBBIY BAZA",
       items: [
         { id: "cases", label: "Klinik Case'lar", icon: "stethoscope" },
+        { id: "case_sources", label: "Ishonchli Manbalar", icon: "fileText" },
         { id: "categories", label: "Bo'limlar", icon: "folders" },
         { id: "topics", label: "Mavzular", icon: "listChecks" },
         { id: "ai_prompts", label: "AI Promptlari", icon: "sparkles" },

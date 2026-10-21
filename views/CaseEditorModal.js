@@ -21,6 +21,7 @@ export const CaseEditorModal = ({
     category_id: '',
     topic_id: '',
     difficulty: 'medium',
+    max_attempts: 1,
     status: 'draft',
     patient_age: 45,
     patient_gender: 'male',
@@ -62,6 +63,7 @@ export const CaseEditorModal = ({
         category_id: caseItem.category_id || '',
         topic_id: caseItem.topic_id || '',
         difficulty: caseItem.difficulty || 'medium',
+        max_attempts: caseItem.max_attempts ?? 1,
         status: caseItem.status || 'draft',
         patient_age: caseItem.patient_age ?? 45,
         patient_gender: caseItem.patient_gender || 'male',
@@ -107,6 +109,7 @@ export const CaseEditorModal = ({
         category_id: defaultCat,
         topic_id: defaultTopic,
         difficulty: 'medium',
+        max_attempts: 1,
         status: 'draft',
         patient_age: 45,
         patient_gender: 'male',
@@ -162,6 +165,7 @@ export const CaseEditorModal = ({
     const payload = {
       ...formData,
       category_id: formData.category_id || undefined,
+      max_attempts: parseInt(formData.max_attempts, 10) || 0,
       patient_age: parseInt(formData.patient_age, 10) || 0,
       expected_duration_minutes: parseInt(formData.expected_duration_minutes, 10) || 15,
       order_num: parseInt(formData.order_num, 10) || 1,
@@ -264,10 +268,9 @@ export const CaseEditorModal = ({
 
             {/* Multilingual Titles */}
             <div className="form-group">
-              <label className="form-label">Keys Nomi (O'zbekcha) *:</label>
+              <label className="form-label">Keys Nomi (O'zbekcha, ixtiyoriy):</label>
               <input
                 className="form-input"
-                required
                 placeholder="Masalan: O'tkir Miokard Infarkti (STEMI)"
                 value={formData.title.uz || ''}
                 onChange={(e) => setFormData({ ...formData, title: { ...formData.title, uz: e.target.value } })}
@@ -351,6 +354,19 @@ export const CaseEditorModal = ({
                   value={formData.expected_duration_minutes}
                   onChange={(e) => setFormData({ ...formData, expected_duration_minutes: parseInt(e.target.value, 10) || 15 })}
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Urinishlar Limiti (max_attempts):</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="form-input"
+                  placeholder="1"
+                  value={formData.max_attempts ?? ''}
+                  onChange={(e) => setFormData({ ...formData, max_attempts: e.target.value })}
+                />
+                <span style={{ fontSize: '11px', color: '#64748b' }}>Bo'sh/0 = default 1</span>
               </div>
             </div>
           </div>
