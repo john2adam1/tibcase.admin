@@ -144,6 +144,17 @@ export default function AdminApp() {
       else if (data && data.message) msg = data.message;
       else if (typeof data === 'string' && data) msg = data;
       if (res.status === 401) msg = `Sessiya tugagan yoki token noto'g'ri. Qayta login qiling. (${msg})`;
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('Retry-After');
+        const slug = data?.error?.slug || 'too_many_requests';
+        if (slug === 'otp_locked') {
+          msg = `Juda ko'p noto'g'ri urinish — kod yaroqsiz. Yangi kod so'rang.`;
+        } else {
+          msg = retryAfter
+            ? `Juda ko'p so'rov. ${retryAfter} soniyadan keyin qayta urinib ko'ring.`
+            : `Juda ko'p so'rov (429). Biroz kutib qayta urinib ko'ring.`;
+        }
+      }
       if (!silent) addToast(msg, 'err');
       const err = new Error(msg);
       err.status = res.status;
@@ -320,16 +331,22 @@ export default function AdminApp() {
           📑 Mavzular
         </button>
         <button
-          className={`nav ${currentTab === 'case' ? 'active' : ''}`}
-          onClick={() => setCurrentTab('case')}
+          className={`nav ${currentTab === 'source' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('source')}
         >
-          🧠 Case'lar
+          📚 Manbalar (AI bazasi)
         </button>
         <button
-          className={`nav ${currentTab === 'case_source' ? 'active' : ''}`}
-          onClick={() => setCurrentTab('case_source')}
+          className={`nav ${currentTab === 'practice_stats' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('practice_stats')}
         >
-          📚 Ishonchli manbalar
+          📈 AI Practice
+        </button>
+        <button
+          className={`nav ${currentTab === 'flashcard_stats' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('flashcard_stats')}
+        >
+          🃏 Fleshkartalar
         </button>
         <button
           className={`nav ${currentTab === 'level' ? 'active' : ''}`}
@@ -382,6 +399,12 @@ export default function AdminApp() {
           onClick={() => setCurrentTab('notification')}
         >
           🔔 Bildirishnomalar
+        </button>
+        <button
+          className={`nav ${currentTab === 'feedback' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('feedback')}
+        >
+          💬 Fikrlar
         </button>
 
         <div className="grp">Boshqaruv</div>
@@ -436,7 +459,9 @@ export default function AdminApp() {
         {currentTab === 'category' && <GenericPanel key="category" moduleKey="category" api={api} addToast={addToast} />}
         {currentTab === 'topic' && <GenericPanel key="topic" moduleKey="topic" api={api} addToast={addToast} />}
         {currentTab === 'case' && <CasePanel api={api} addToast={addToast} />}
-        {currentTab === 'case_source' && <GenericPanel key="case_source" moduleKey="case_source" api={api} addToast={addToast} />}
+        {currentTab === 'source' && <SourcePanel api={api} addToast={addToast} />}
+        {currentTab === 'practice_stats' && <PracticeStatsPanel api={api} />}
+        {currentTab === 'flashcard_stats' && <FlashcardStatsPanel api={api} />}
         {currentTab === 'level' && <GenericPanel key="level" moduleKey="level" api={api} addToast={addToast} />}
         {currentTab === 'ai_prompt' && <AiPromptPanel api={api} addToast={addToast} />}
 
@@ -447,6 +472,7 @@ export default function AdminApp() {
 
         {currentTab === 'user' && <UserPanel api={api} addToast={addToast} />}
         {currentTab === 'notification' && <GenericPanel key="notification" moduleKey="notification" api={api} addToast={addToast} />}
+        {currentTab === 'feedback' && <FeedbackPanel api={api} addToast={addToast} />}
 
         {currentTab === 'admin' && <GenericPanel key="admin" moduleKey="admin" api={api} addToast={addToast} />}
         {currentTab === 'my_profile' && <AdminProfilePanel api={api} addToast={addToast} />}
@@ -528,7 +554,9 @@ async function loadRefOptions(kind, api) {
   } catch {
     items = [];
   }
-  REF_CACHE[kind] = items;
+  if (items.length > 0) {
+    REF_CACHE[kind] = items;
+  }
   return items;
 }
 function invalidateRef(kind) {
@@ -647,8 +675,8 @@ function DashboardPanel({ api }) {
       </div>
 
       <div className="cards">
-        {items.map(([l, v], idx) => (
-          <div key={idx} className="card">
+        {items.map(([l, v]) => (
+          <div key={l} className="card">
             <div className="v">{v ?? '—'}</div>
             <div className="l">{l}</div>
           </div>
@@ -747,43 +775,37 @@ const MODULE_CONFIGS = {
   category: {
     label: "Bo'limlar (Category)",
     base: '/web/category',
-    columns: ['id', 'name', 'audience', 'order_num', 'created_at'],
+    columns: ['id', 'name', 'audience', 'is_active', 'order_num', 'created_at'],
     search: [
       { name: 'name', label: 'Nomi', type: 'text' },
       { name: 'audience', label: 'Rejim', type: 'select', includeEmpty: true, options: [{ value: 'doctor', label: '👨‍⚕️ Shifokor' }, { value: 'citizen', label: '🚑 Aholi (Birinchi yordam)' }] }
     ],
     fields: [
       { name: 'name', label: 'Nomi', type: 'ml', required: true },
+      { name: 'description', label: 'Tavsif', type: 'ml', textarea: true },
       { name: 'icon_url', label: 'Ikonka URL', type: 'file' },
       { name: 'audience', label: 'Rejim (Home ekran toggle)', type: 'select', options: [{ value: 'doctor', label: '👨‍⚕️ Shifokor' }, { value: 'citizen', label: '🚑 Aholi (Birinchi yordam)' }] },
-      { name: 'order_num', label: 'Tartib raqami', type: 'number' }
+      { name: 'order_num', label: 'Tartib raqami', type: 'number' },
+      { name: 'is_active', label: 'Faol (mobil ro\'yxatda ko\'rinadi)', type: 'boolean' }
     ],
     onSaved: () => invalidateRef('category')
   },
   topic: {
     label: "Mavzular (Topic)",
     base: '/web/topic',
-    columns: ['id', 'category_id', 'name', 'order_num', 'created_at'],
+    columns: ['id', 'category_id', 'name', 'is_active', 'order_num', 'created_at'],
     search: [
       { name: 'category_id', label: 'Bo\'lim', type: 'select', asyncOptions: 'category', includeEmpty: true }
     ],
     fields: [
       { name: 'category_id', label: 'Bo\'lim', type: 'select', asyncOptions: 'category', required: true },
       { name: 'name', label: 'Nomi', type: 'ml', required: true },
-      { name: 'order_num', label: 'Tartib raqami', type: 'number' }
+      { name: 'description', label: 'Tavsif (ml)', type: 'ml', textarea: true },
+      { name: 'ai_hint', label: 'AI yo\'nalishi (masalan: faqat pediatrik holatlar)', type: 'textarea' },
+      { name: 'order_num', label: 'Tartib raqami', type: 'number' },
+      { name: 'is_active', label: 'Faol (mobil ro\'yxatda ko\'rinadi)', type: 'boolean' }
     ],
     onSaved: () => invalidateRef('topic')
-  },
-  case_source: {
-    label: "Ishonchli manbalar",
-    base: '/web/case-source',
-    columns: ['id', 'name', 'content', 'created_at'],
-    search: [{ name: 'name', label: 'Nomi', type: 'text' }],
-    fields: [
-      { name: 'name', label: 'Nomi', type: 'text', required: true },
-      { name: 'content', label: 'Veb-havola (http/https) yoki matn parchasi', type: 'textarea', full: true, rows: 8 }
-    ],
-    silentList: true
   },
   promocode: {
     label: "Promokodlar",
@@ -973,6 +995,9 @@ function GenericPanel({ moduleKey, api, addToast }) {
     }
   };
 
+  const activeFields = editItem ? (cfg.updateFields || cfg.fields) : cfg.fields;
+  const totalPages = Math.max(1, Math.ceil((count || items.length) / limit));
+
   const handleModalSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -995,6 +1020,8 @@ function GenericPanel({ moduleKey, api, addToast }) {
         const cur = formValues[f.name];
         if (f.type === 'ml') {
           payload[f.name] = { uz: cur?.uz || '', ru: cur?.ru || '', en: cur?.en || '' };
+        } else if (f.type === 'boolean') {
+          payload[f.name] = cur === true || cur === 'true' ? true : false;
         } else if (f.type === 'number') {
           payload[f.name] = cur === undefined || cur === null || cur === '' ? 0 : Number(cur);
         } else if (f.type === 'select') {
@@ -1021,9 +1048,6 @@ function GenericPanel({ moduleKey, api, addToast }) {
       // handled
     }
   };
-
-  const totalPages = Math.max(1, Math.ceil((count || items.length) / limit));
-  const activeFields = editItem ? (cfg.updateFields || cfg.fields) : cfg.fields;
 
   return (
     <div>
@@ -1211,6 +1235,16 @@ function GenericPanel({ moduleKey, api, addToast }) {
                           {f.includeEmpty && <option value="">— tanlang —</option>}
                           {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
+                      ) : f.type === 'boolean' ? (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 400 }}>
+                          <input
+                            type="checkbox"
+                            checked={!!formValues[f.name]}
+                            onChange={(e) => setFormValues({ ...formValues, [f.name]: e.target.checked })}
+                            style={{ width: '16px', height: '16px', accentColor: 'var(--accent)' }}
+                          />
+                          {formValues[f.name] ? 'Ha (true)' : "Yo'q (false)"}
+                        </label>
                       ) : (
                         <input
                           type={f.type === 'number' ? 'number' : f.type === 'password' ? 'password' : 'text'}
@@ -2766,7 +2800,6 @@ function OrderPanel({ api }) {
               <th>Foydalanuvchi</th>
               <th>Tarif</th>
               <th>Summa</th>
-              <th>Tanga</th>
               <th>Turi</th>
               <th>Status</th>
               <th>Yaratildi</th>
@@ -2785,7 +2818,6 @@ function OrderPanel({ api }) {
                 </td>
                 <td>{fmtCell(o.tariff_name)}</td>
                 <td>{fmtCell(o.amount)}</td>
-                <td>{fmtCell(o.coins_used)}</td>
                 <td>{fmtCell(o.payment_type)}</td>
                 <td><span className="pill">{fmtCell(o.status)}</span></td>
                 <td>{fmtCell(o.created_at)}</td>
@@ -2825,7 +2857,6 @@ function OrderPanel({ api }) {
               <div><span className="k">Foydalanuvchi:</span>{selectedOrder.user_name || '—'} ({selectedOrder.user_phone || selectedOrder.user_id})</div>
               <div><span className="k">Tarif:</span>{selectedOrder.tariff_name || '—'}</div>
               <div><span className="k">Summa:</span>{selectedOrder.amount ? `${selectedOrder.amount.toLocaleString()} so'm` : '0 so\'m'}</div>
-              <div><span className="k">Ishlatilgan tangalar:</span>🪙 {selectedOrder.coins_used ?? 0}</div>
               <div><span className="k">To'lov usuli:</span>{selectedOrder.payment_type || '—'}</div>
               <div><span className="k">Yaratilgan vaqti:</span>{selectedOrder.created_at || '—'}</div>
               <div><span className="k">To'langan vaqti:</span>{selectedOrder.paid_at || '—'}</div>
@@ -2920,8 +2951,8 @@ function CoinMonitoringPanel({ api }) {
       <p className="pageDesc">/web/coin-transaction — faqat ko'rish</p>
 
       <div className="cards">
-        {cards.map(([l, v], idx) => (
-          <div key={idx} className="card">
+        {cards.map(([l, v]) => (
+          <div key={l} className="card">
             <div className="v">🪙 {v ?? 0}</div>
             <div className="l">{l}</div>
           </div>
@@ -3493,6 +3524,61 @@ function SettingsPanel({ api, addToast }) {
   const [savingRate, setSavingRate] = useState(false);
   const [coinRateMissing, setCoinRateMissing] = useState(false);
 
+  // daily-free-coins
+  const [dailyFreeCoins, setDailyFreeCoins] = useState(10);
+  const [savingDailyCoins, setSavingDailyCoins] = useState(false);
+
+  // practice-images
+  const [practiceImages, setPracticeImages] = useState(false);
+  const [savingPracticeImages, setSavingPracticeImages] = useState(false);
+
+  // referral rewards
+  const [refReferrer, setRefReferrer] = useState(50);
+  const [refReferred, setRefReferred] = useState(20);
+  const [savingReferral, setSavingReferral] = useState(false);
+  const [showDeprecated, setShowDeprecated] = useState(false);
+
+  const loadDailyFreeCoins = async () => {
+    try {
+      const res = await api('/web/setting/daily-free-coins', { silent: true });
+      if (res && res.daily_free_coins !== undefined) setDailyFreeCoins(res.daily_free_coins);
+    } catch {}
+  };
+
+  const loadPracticeImages = async () => {
+    try {
+      const res = await api('/web/setting/practice-images', { silent: true });
+      if (res && res.enabled !== undefined) setPracticeImages(!!res.enabled);
+    } catch {}
+  };
+
+  const handleSaveDailyFreeCoins = async (e) => {
+    e.preventDefault();
+    const val = Number(dailyFreeCoins);
+    if (isNaN(val) || val < 0) {
+      addToast("Kunlik bepul tangalar 0 yoki undan katta bo'lishi kerak", 'err');
+      return;
+    }
+    setSavingDailyCoins(true);
+    try {
+      await api('/web/setting/daily-free-coins', { method: 'PUT', body: { daily_free_coins: val } });
+      addToast('Kunlik bepul tangalar saqlandi', 'ok');
+      loadDailyFreeCoins();
+    } catch {} finally {
+      setSavingDailyCoins(false);
+    }
+  };
+
+  const handleSavePracticeImages = async () => {
+    setSavingPracticeImages(true);
+    try {
+      await api('/web/setting/practice-images', { method: 'PUT', body: { enabled: practiceImages } });
+      addToast(`AI tibbiy tasvirlar ${practiceImages ? 'yoqildi' : "o'chirildi"}`, 'ok');
+    } catch {} finally {
+      setSavingPracticeImages(false);
+    }
+  };
+
   const loadCoinRate = async () => {
     try {
       const res = await api('/web/setting/coin-rate', { silent: true });
@@ -3526,9 +3612,33 @@ function SettingsPanel({ api, addToast }) {
   const load = async () => {
     try {
       const res = await api('/web/setting');
-      setSettings(Array.isArray(res) ? res : []);
+      const list = Array.isArray(res) ? res : [];
+      setSettings(list);
+      const sRef = list.find(s => s.key === 'referral_reward_referrer_coins');
+      if (sRef && sRef.value !== undefined) setRefReferrer(Number(sRef.value) || 50);
+      const sReferred = list.find(s => s.key === 'referral_reward_referred_coins');
+      if (sReferred && sReferred.value !== undefined) setRefReferred(Number(sReferred.value) || 20);
     } catch {
       setSettings([]);
+    }
+  };
+
+  const handleSaveReferral = async (e) => {
+    e.preventDefault();
+    const referrer = Number(refReferrer);
+    const referred = Number(refReferred);
+    if (isNaN(referrer) || referrer < 0 || isNaN(referred) || referred < 0) {
+      addToast("Tanga miqdori 0 yoki undan katta bo'lishi kerak", "err");
+      return;
+    }
+    setSavingReferral(true);
+    try {
+      await api('/web/setting', { method: 'PUT', body: { key: 'referral_reward_referrer_coins', value: String(referrer) } });
+      await api('/web/setting', { method: 'PUT', body: { key: 'referral_reward_referred_coins', value: String(referred) } });
+      addToast("Referral rag'bat tangalari saqlandi", "ok");
+      load();
+    } catch {} finally {
+      setSavingReferral(false);
     }
   };
 
@@ -3548,6 +3658,8 @@ function SettingsPanel({ api, addToast }) {
     load();
     loadDiff();
     loadCoinRate();
+    loadDailyFreeCoins();
+    loadPracticeImages();
   }, []);
 
   const handleSaveDiff = async (e) => {
@@ -3585,6 +3697,52 @@ function SettingsPanel({ api, addToast }) {
     <div>
       <h2 className="pageTitle">Tizim sozlamalari</h2>
       <p className="pageDesc">/web/setting — key/value (value JSON string sifatida)</p>
+
+      {/* Pay-as-you-go card */}
+      <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
+        <h3 style={{ marginTop: 0 }}>💰 Pay-as-you-go sozlamalari</h3>
+        <p className="muted" style={{ marginBottom: '14px' }}>
+          Kunlik bepul tangalar (har 24 soatda qayta tiklanadi, to'planmaydi) va AI tibbiy tasvirlar uchun sozlamalar.
+        </p>
+
+        <form onSubmit={handleSaveDailyFreeCoins} style={{ marginBottom: '14px' }}>
+          <div className="field">
+            <label>Kunlik bepul tangalar *</label>
+            <input
+              type="number"
+              min="0"
+              required
+              value={dailyFreeCoins}
+              onChange={(e) => setDailyFreeCoins(e.target.value)}
+            />
+          </div>
+          <div className="modalFooter">
+            <button type="submit" className="primary" disabled={savingDailyCoins}>
+              {savingDailyCoins ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </div>
+        </form>
+
+        <div className="field" style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 500 }}>
+            <input
+              type="checkbox"
+              checked={practiceImages}
+              onChange={(e) => setPracticeImages(e.target.checked)}
+              style={{ width: '16px', height: '16px', accentColor: 'var(--accent)' }}
+            />
+            AI tibbiy tasvirlar (EKG, rentgen, KT, MRT, UZI) — case rejimida
+          </label>
+          <p className="muted" style={{ marginTop: '6px', fontSize: '12px' }}>
+            Yoqilganda AI case uchun klinik jihatdan muhim bo'lsa tasvir yaratadi. Generatsiya next so'rovini 10–30s ushlaytirishi mumkin.
+          </p>
+          <div className="modalFooter">
+            <button type="button" className="primary" disabled={savingPracticeImages} onClick={handleSavePracticeImages}>
+              {savingPracticeImages ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
         <h3 style={{ marginTop: 0 }}>Qiyinlik koeffitsienti (XP / coin)</h3>
@@ -3654,11 +3812,71 @@ function SettingsPanel({ api, addToast }) {
         </form>
       </div>
 
-      <button className="primary" onClick={() => { setFormKey('daily_free_limit'); setFormVal(''); setIsModalOpen(true); }}>
-        + Sozlama qo'shish / yangilash
-      </button>
+      {/* Referral rewards card */}
+      <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
+        <h3 style={{ marginTop: 0 }}>🤝 Referral rag'bat tangalari</h3>
+        <p className="muted" style={{ marginBottom: '10px' }}>
+          Do'stlarni taklif qilish tizimida beriladigan rag'bat tangalari (referral_reward_referrer_coins / referral_reward_referred_coins).
+        </p>
+        <form onSubmit={handleSaveReferral}>
+          <div className="formGrid">
+            <div className="field">
+              <label>Taklif qilganga (referrer) tanga *</label>
+              <input
+                type="number"
+                min="0"
+                required
+                value={refReferrer}
+                onChange={(e) => setRefReferrer(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Taklif qilinganga (referred) tanga *</label>
+              <input
+                type="number"
+                min="0"
+                required
+                value={refReferred}
+                onChange={(e) => setRefReferred(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="modalFooter">
+            <button type="submit" className="primary" disabled={savingReferral}>
+              {savingReferral ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+          </div>
+        </form>
+      </div>
 
-      <div style={{ marginTop: '14px' }}>
+      {/* Security & System Info card */}
+      <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
+        <h3 style={{ marginTop: 0 }}>🛡️ Xavfsizlik & Cheklovlar (MVP)</h3>
+        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.6' }} className="muted">
+          <li><strong>429 Rate Limiting:</strong> So'rovlar ko'payganda tizim <code>Retry-After</code> bilan vaqtinchalik to'xtatadi.</li>
+          <li><strong>OTP Lockout:</strong> Ketma-ket 5 marta xato OTP kiritilganda hisob vaqtinchalik bloklanadi.</li>
+          <li><strong>Captcha:</strong> Cloudflare Turnstile / reCAPTCHA integratsiyasi orqali botlardan himoya.</li>
+          <li><strong>Prompt Injection:</strong> AI Practice tizimida maxsus tibbiy qoliplar orqali tekshiriladi.</li>
+        </ul>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+        <button className="primary" onClick={() => { setFormKey('daily_free_coins'); setFormVal('10'); setIsModalOpen(true); }}>
+          + Sozlama qo'shish / yangilash
+        </button>
+        {settings.some(s => ['coin_to_uzs_rate', 'voice_enabled', 'daily_free_limit'].includes(s.key)) && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', color: 'var(--muted)' }}>
+            <input
+              type="checkbox"
+              checked={showDeprecated}
+              onChange={(e) => setShowDeprecated(e.target.checked)}
+            />
+            Bekor qilingan / arxiv sozlamalarni ko'rsatish
+          </label>
+        )}
+      </div>
+
+      <div>
         {settings.length === 0 ? (
           <p className="muted">Sozlamalar topilmadi.</p>
         ) : (
@@ -3672,18 +3890,26 @@ function SettingsPanel({ api, addToast }) {
               </tr>
             </thead>
             <tbody>
-              {settings.map((s, idx) => (
-                <tr key={s.key || idx}>
-                  <td>{s.key}</td>
-                  <td>{fmtCell(s.value)}</td>
-                  <td>{fmtCell(s.updated_at)}</td>
-                  <td>
-                    <button className="sm" onClick={() => { setFormKey(s.key); setFormVal(typeof s.value === 'object' ? JSON.stringify(s.value) : String(s.value || '')); setIsModalOpen(true); }}>
-                      ✏️ Tahrir
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {settings
+                .filter(s => showDeprecated || !['coin_to_uzs_rate', 'voice_enabled', 'daily_free_limit'].includes(s.key))
+                .map((s, idx) => {
+                  const isDep = ['coin_to_uzs_rate', 'voice_enabled', 'daily_free_limit'].includes(s.key);
+                  return (
+                    <tr key={s.key || idx} style={isDep ? { opacity: 0.6 } : {}}>
+                      <td>
+                        <code>{s.key}</code>
+                        {isDep && <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--danger)', border: '1px solid currentColor', borderRadius: '4px', padding: '1px 5px' }}>bekor qilingan</span>}
+                      </td>
+                      <td>{fmtCell(s.value)}</td>
+                      <td>{fmtCell(s.updated_at)}</td>
+                      <td>
+                        <button className="sm" onClick={() => { setFormKey(s.key); setFormVal(typeof s.value === 'object' ? JSON.stringify(s.value) : String(s.value || '')); setIsModalOpen(true); }}>
+                          ✏️ Tahrir
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         )}
@@ -4021,6 +4247,725 @@ function CustomPermissionPanel({ mode, api, addToast }) {
                 <button type="submit" className="primary">Saqlash</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   SOURCES PANEL (/web/source) — AI bazasi manbalari
+   ============================================================ */
+const SOURCE_TYPES = [
+  { value: 'book', label: '📖 Kitob' },
+  { value: 'article', label: '📄 Maqola' },
+  { value: 'website', label: '🌐 Sayt' },
+  { value: 'text', label: 'Matn' }
+];
+const SOURCE_STATUSES = [
+  { value: 'processing', label: '⏳ processing' },
+  { value: 'ready', label: '✅ ready' },
+  { value: 'failed', label: '❌ failed' }
+];
+const SOURCE_MAX_FILE = 50 * 1024 * 1024;
+const emptySourceForm = () => ({
+  title: '', type: 'book', language: '', author: '', url: '', content: '',
+  is_active: true, category_ids: [], topic_ids: [], file: null
+});
+
+function SourcePanel({ api, addToast }) {
+  const [items, setItems] = useState([]);
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [filters, setFilters] = useState({ name: '', type: '', status: '', category_id: '', topic_id: '' });
+  const [applied, setApplied] = useState({});
+  const [cats, setCats] = useState([]);
+  const [topics, setTopics] = useState([]);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [form, setForm] = useState(emptySourceForm());
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      setCats(await loadRefOptions('category', api));
+      setTopics(await loadRefOptions('topic', api));
+    })();
+  }, []);
+
+  const load = async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    try {
+      const res = await api('/web/source', { query: { ...applied, page, limit }, silent: quiet });
+      const ex = extractList(res);
+      setItems(ex.items);
+      setCount(ex.count);
+    } catch {
+      if (!quiet) { setItems([]); setCount(0); }
+    } finally {
+      if (!quiet) setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [page, limit, applied]);
+
+  // processing holatidagi qator bo'lsa har 3 soniyada yangilash
+  useEffect(() => {
+    if (!items.some(i => i.status === 'processing')) return undefined;
+    const t = setTimeout(() => load(true), 3000);
+    return () => clearTimeout(t);
+  }, [items]);
+
+  const search = () => {
+    const a = {};
+    Object.entries(filters).forEach(([k, v]) => { if (v) a[k] = v.trim ? v.trim() : v; });
+    setPage(1);
+    setApplied(a);
+  };
+
+  const openCreate = () => {
+    setEditItem(null);
+    setForm(emptySourceForm());
+    setIsModalOpen(true);
+  };
+
+  const openEdit = async (row) => {
+    let d = row;
+    try { d = await api(`/web/source/${row.id}`, { silent: true }); } catch {}
+    setEditItem(d);
+    setForm({
+      ...emptySourceForm(),
+      title: d.title || '',
+      type: d.type || 'text',
+      language: d.language || '',
+      author: d.author || '',
+      url: d.url || '',
+      is_active: d.is_active !== false,
+      category_ids: d.category_ids || [],
+      topic_ids: d.topic_ids || []
+    });
+    setIsModalOpen(true);
+  };
+
+  const toggleId = (key, id) => setForm(f => ({
+    ...f,
+    [key]: f[key].includes(id) ? f[key].filter(x => x !== id) : [...f[key], id]
+  }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (editItem?.id) {
+        await api(`/web/source/${editItem.id}/update`, {
+          method: 'PUT',
+          body: {
+            title: form.title,
+            language: form.language,
+            author: form.author,
+            url: form.url,
+            is_active: form.is_active,
+            category_ids: form.category_ids,
+            topic_ids: form.topic_ids
+          }
+        });
+        addToast("Saqlandi", "ok");
+      } else {
+        const t = form.type;
+        if (t === 'book' && !form.file) { addToast("Kitob uchun fayl majburiy", "err"); return; }
+        if (t === 'article' && !form.file && !form.content.trim()) { addToast("Maqola uchun fayl yoki matn kiriting", "err"); return; }
+        if (t === 'website' && !/^https?:\/\//i.test(form.url.trim())) { addToast("URL http:// yoki https:// bilan boshlanishi kerak", "err"); return; }
+        if (t === 'text' && !form.content.trim()) { addToast("Matn majburiy", "err"); return; }
+        if (form.file && form.file.size > SOURCE_MAX_FILE) { addToast("Fayl 50 MB dan oshmasligi kerak", "err"); return; }
+
+        const fd = new FormData();
+        fd.append('title', form.title);
+        fd.append('type', t);
+        if (form.language) fd.append('language', form.language);
+        if (form.author) fd.append('author', form.author);
+        if ((t === 'book' || t === 'article') && form.file) fd.append('file', form.file);
+        if (t === 'website') fd.append('url', form.url.trim());
+        if ((t === 'text' || t === 'article') && !form.file) fd.append('content', form.content);
+        form.category_ids.forEach(id => fd.append('category_ids', id));
+        form.topic_ids.forEach(id => fd.append('topic_ids', id));
+        await api('/web/source', { method: 'POST', body: fd, isForm: true, timeoutMs: 5 * 60 * 1000 });
+        addToast("Manba yuklandi, qayta ishlanmoqda…", "ok");
+      }
+      setIsModalOpen(false);
+      load();
+    } catch {
+      // handled
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReindex = async (row) => {
+    try {
+      await api(`/web/source/${row.id}/reindex`, { method: 'POST' });
+      addToast("Qayta indekslash boshlandi", "ok");
+      load();
+    } catch {}
+  };
+
+  const handleDelete = async (row) => {
+    if (!window.confirm(`Manba va uning chunklari o'chirilsinmi?\n${row.title}`)) return;
+    try {
+      await api(`/web/source/${row.id}/delete`, { method: 'DELETE' });
+      addToast("O'chirildi", "ok");
+      load();
+    } catch {}
+  };
+
+  const statusBadge = (s) => {
+    const color = s === 'ready' ? '#10b981' : s === 'failed' ? '#ef4444' : '#f59e0b';
+    return <span style={{ color, fontWeight: 600 }}>{s}</span>;
+  };
+
+  const totalPages = Math.max(1, Math.ceil((count || items.length) / limit));
+  const filterTopics = filters.category_id ? topics.filter(t => t.category_id === filters.category_id) : topics;
+  const hasProcessing = items.some(i => i.status === 'processing');
+
+  return (
+    <div>
+      <h2 className="pageTitle">Manbalar (AI bazasi)</h2>
+      <p className="pageDesc">/web/source — kitob, maqola, sayt va matn manbalari (RAG)</p>
+      {hasProcessing && <p className="muted" style={{ marginBottom: '8px' }}>⏳ Qayta ishlanayotgan manbalar bor — jadval har 3 soniyada yangilanadi…</p>}
+
+      <div className="toolbar">
+        <div className="field">
+          <label>Nomi</label>
+          <input type="text" value={filters.name}
+            onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') search(); }} />
+        </div>
+        <div className="field">
+          <label>Turi</label>
+          <select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}>
+            <option value="">— barchasi —</option>
+            {SOURCE_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Holat</label>
+          <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+            <option value="">— barchasi —</option>
+            {SOURCE_STATUSES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Bo'lim</label>
+          <select value={filters.category_id} onChange={(e) => setFilters({ ...filters, category_id: e.target.value, topic_id: '' })}>
+            <option value="">— barchasi —</option>
+            {cats.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Mavzu</label>
+          <select value={filters.topic_id} onChange={(e) => setFilters({ ...filters, topic_id: e.target.value })}>
+            <option value="">— barchasi —</option>
+            {filterTopics.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <button onClick={search}>🔍 Qidirish</button>
+        <button className="primary" onClick={openCreate}>+ Yangi</button>
+      </div>
+
+      {loading ? (
+        <p className="muted">Yuklanmoqda...</p>
+      ) : items.length === 0 ? (
+        <p className="muted">Ma'lumot topilmadi.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>title</th><th>type</th><th>status</th><th>chunk_count</th>
+              <th>language</th><th>author</th><th>is_active</th><th>error</th><th>Amallar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(row => (
+              <tr key={row.id}>
+                <td>{fmtCell(row.title)}</td>
+                <td>{(SOURCE_TYPES.find(t => t.value === row.type) || {}).label || row.type}</td>
+                <td>{statusBadge(row.status)}</td>
+                <td>{row.chunk_count ?? 0}</td>
+                <td>{fmtCell(row.language)}</td>
+                <td>{fmtCell(row.author)}</td>
+                <td>{fmtCell(!!row.is_active)}</td>
+                <td title={row.error || ''}>{fmtCell(row.error)}</td>
+                <td>
+                  <div className="actions">
+                    <button className="sm" onClick={() => openEdit(row)}>✏️ Tahrir</button>
+                    <button className="sm" title="Qayta indekslash" onClick={() => handleReindex(row)}
+                      disabled={row.status === 'processing'}>🔄 Qayta indekslash</button>
+                    <button className="sm danger" onClick={() => handleDelete(row)}>🗑 O'chirish</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="pager">
+        <button className="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Oldingi</button>
+        <span>Sahifa {page} / {totalPages} — jami: {count}</span>
+        <button className="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Keyingi →</button>
+        <select value={limit} onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }} style={{ width: 'auto' }}>
+          {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}/sahifa</option>)}
+        </select>
+      </div>
+
+      {isModalOpen && (
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
+          <div className="modal">
+            <h3>{editItem ? 'Tahrirlash: Manba' : 'Yangi: Manba'}</h3>
+            <form onSubmit={handleSubmit}>
+              <div className="formGrid">
+                <div className="field full">
+                  <label>Nomi *</label>
+                  <input type="text" required value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                </div>
+
+                {!editItem && (
+                  <div className="field">
+                    <label>Turi *</label>
+                    <select value={form.type}
+                      onChange={(e) => setForm({ ...form, type: e.target.value, file: null })}>
+                      {SOURCE_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="field">
+                  <label>Til</label>
+                  <input type="text" placeholder="uz / ru / en" value={form.language}
+                    onChange={(e) => setForm({ ...form, language: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Muallif</label>
+                  <input type="text" value={form.author}
+                    onChange={(e) => setForm({ ...form, author: e.target.value })} />
+                </div>
+
+                {!editItem && (form.type === 'book' || form.type === 'article') && (
+                  <div className="field full">
+                    <label>Fayl (PDF, EPUB, DOCX, TXT — max 50 MB) {form.type === 'book' ? '*' : '(yoki matn)'}</label>
+                    <input ref={fileRef} type="file" accept=".pdf,.epub,.docx,.txt"
+                      onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })} />
+                  </div>
+                )}
+                {(editItem ? editItem.type === 'website' : form.type === 'website') && (
+                  <div className="field full">
+                    <label>URL (http/https) {!editItem && '*'}</label>
+                    <input type="text" placeholder="https://..." value={form.url}
+                      onChange={(e) => setForm({ ...form, url: e.target.value })} />
+                  </div>
+                )}
+                {!editItem && (form.type === 'text' || (form.type === 'article' && !form.file)) && (
+                  <div className="field full">
+                    <label>Matn {form.type === 'text' ? '*' : '(fayl o\'rniga)'}</label>
+                    <textarea rows={8} value={form.content}
+                      onChange={(e) => setForm({ ...form, content: e.target.value })} />
+                  </div>
+                )}
+
+                {editItem && (
+                  <div className="field">
+                    <label>
+                      <input type="checkbox" checked={form.is_active}
+                        onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> Faol (is_active)
+                    </label>
+                  </div>
+                )}
+
+                <div className="field full">
+                  <label>Bo'limlar (hech biri tanlanmasa — umumiy manba)</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                    {cats.map(c => (
+                      <label key={c.value} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <input type="checkbox" checked={form.category_ids.includes(c.value)}
+                          onChange={() => toggleId('category_ids', c.value)} /> {c.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="field full">
+                  <label>Mavzular</label>
+                  <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                    {cats.map(c => {
+                      const ts = topics.filter(t => t.category_id === c.value);
+                      if (ts.length === 0) return null;
+                      return (
+                        <div key={c.value} style={{ marginBottom: '6px' }}>
+                          <div className="muted" style={{ fontSize: '12px' }}>{c.label}</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                            {ts.map(t => (
+                              <label key={t.value} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <input type="checkbox" checked={form.topic_ids.includes(t.value)}
+                                  onChange={() => toggleId('topic_ids', t.value)} /> {t.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="modalFooter">
+                <button type="button" onClick={() => setIsModalOpen(false)}>Bekor qilish</button>
+                <button type="submit" className="primary" disabled={saving}>{saving ? 'Saqlanmoqda…' : 'Saqlash'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   AI PRACTICE STATS PANEL (/web/practice/stats)
+   ============================================================ */
+function PracticeStatsPanel({ api }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      setData(await api('/web/practice/stats'));
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const pct = (v) => (typeof v === 'number' ? `${Math.round(v * 1000) / 10}%` : '—');
+  const cards = [
+    ['Sessiyalar', data?.sessions],
+    ['Faol sessiyalar', data?.active_sessions],
+    ['Elementlar', data?.items],
+    ['Javoblar', data?.answered],
+    ["To'g'ri javoblar ulushi", pct(data?.correct_rate)],
+    ['Sarflangan tokenlar', data?.tokens_used ?? data?.tokens],
+    ['Sarflangan tangalar', data?.coins_spent],
+    ['Fleshkartalar yaratilgan', data?.flashcards_created],
+    ['Shikoyatlar', data?.reports]
+  ];
+
+  const nameOf = (r) => fmtCell(r.name);
+  const byCat = data?.by_category || [];
+  const byTopic = data?.by_topic || [];
+  const reports = data?.recent_reports || [];
+
+  return (
+    <div>
+      <h2 className="pageTitle">AI Practice</h2>
+      <p className="pageDesc">/web/practice/stats</p>
+      <div className="toolbar">
+        <button className="primary" onClick={load}>Yangilash</button>
+      </div>
+
+      {loading ? (
+        <p className="muted">Yuklanmoqda...</p>
+      ) : !data ? (
+        <p className="muted">Ma'lumot topilmadi.</p>
+      ) : (
+        <>
+          <div className="cards">
+            {cards.map(([l, v]) => (
+              <div key={l} className="card">
+                <div className="v">{v ?? '—'}</div>
+                <div className="l">{l}</div>
+              </div>
+            ))}
+          </div>
+
+          <h3 style={{ margin: '20px 0 8px' }}>Bo'limlar bo'yicha</h3>
+          {byCat.length === 0 ? <p className="muted">Ma'lumot yo'q.</p> : (
+            <table>
+              <thead><tr><th>Bo'lim</th><th>sessions</th><th>items</th></tr></thead>
+              <tbody>
+                {byCat.map((r, i) => (
+                  <tr key={r.id || i}><td>{nameOf(r)}</td><td>{r.sessions ?? 0}</td><td>{r.items ?? 0}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <h3 style={{ margin: '20px 0 8px' }}>Mavzular bo'yicha</h3>
+          {byTopic.length === 0 ? <p className="muted">Ma'lumot yo'q.</p> : (
+            <table>
+              <thead><tr><th>Mavzu</th><th>sessions</th><th>items</th></tr></thead>
+              <tbody>
+                {byTopic.map((r, i) => (
+                  <tr key={r.id || i}><td>{nameOf(r)}</td><td>{r.sessions ?? 0}</td><td>{r.items ?? 0}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <h3 style={{ margin: '20px 0 8px' }}>So'nggi shikoyatlar</h3>
+          {reports.length === 0 ? <p className="muted">Shikoyatlar yo'q.</p> : (
+            <table>
+              <thead><tr><th>item_id</th><th>session_id</th><th>kind</th><th>reason</th><th>created_at</th></tr></thead>
+              <tbody>
+                {reports.map((r, i) => (
+                  <tr key={r.id || `${r.item_id || 'rep'}_${r.session_id || i}`}>
+                    <td>{fmtCell(r.item_id)}</td>
+                    <td>{fmtCell(r.session_id)}</td>
+                    <td>{fmtCell(r.kind)}</td>
+                    <td>{fmtCell(r.reason)}</td>
+                    <td>{fmtCell(r.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   FLASHCARD STATS PANEL
+   ============================================================ */
+function FlashcardStatsPanel({ api }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await api('/web/flashcard/stats');
+      setData(res);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const pct = (v) => (typeof v === 'number' ? `${Math.round(v * 10) / 10}%` : '—');
+
+  const statCards = data ? [
+    ["Jami kartalar", data.total],
+    ["Hozir takrorlanishi kerak", data.due_now],
+    ["Bugun takrorlanishi kerak", data.due_today],
+    ["Yangi (o'qilmagan)", data.new],
+    ["O'zlashtirilgan", data.learned],
+    ["Bugun bajarilgan takrorlar", data.reviews_today],
+    ["30 kun eslab qolish", pct(data.retention_30d)],
+    ["To'plamlar soni", data.decks],
+    ["Joriy streak", data.streak_count],
+    ["Eng uzun streak", data.longest_streak]
+  ] : [];
+
+  return (
+    <div>
+      <h2 className="pageTitle">🃏 Fleshkartalar statistikasi</h2>
+      <p className="pageDesc">/web/flashcard/stats — jami kartalar, takrorlashlar, eslab qolish</p>
+
+      <div className="toolbar">
+        <button className="primary" onClick={load}>🔄 Yangilash</button>
+      </div>
+
+      {loading ? (
+        <p className="muted">Yuklanmoqda...</p>
+      ) : !data ? (
+        <p className="muted">Ma'lumot topilmadi.</p>
+      ) : (
+        <div className="cards">
+          {statCards.map(([l, v]) => (
+            <div key={l} className="card">
+              <div className="v">{v ?? '—'}</div>
+              <div className="l">{l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   FEEDBACK PANEL
+   ============================================================ */
+function FeedbackPanel({ api, addToast }) {
+  const [items, setItems] = useState([]);
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [kindFilter, setKindFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [selected, setSelected] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await api('/web/feedback', {
+        query: { page, limit, kind: kindFilter || undefined, status: statusFilter || undefined }
+      });
+      const extracted = extractList(res);
+      setItems(extracted.items);
+      setCount(extracted.count);
+    } catch {
+      setItems([]);
+      setCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [page]);
+
+  const totalPages = Math.max(1, Math.ceil((count || items.length) / limit));
+
+  const handleStatusChange = async (fb, newStatus) => {
+    try {
+      await api(`/web/feedback/${fb.id}/status`, { method: 'PUT', body: { status: newStatus } });
+      addToast('Holat yangilandi', 'ok');
+      load();
+      if (selected && selected.id === fb.id) setSelected({ ...selected, status: newStatus });
+    } catch {}
+  };
+
+  const kindLabel = (k) => ({ general: '💬 Umumiy', bug: '🐛 Xato', idea: '💡 Taklif', content: '📚 Kontent', nps: '⭐ NPS' }[k] || k || '—');
+  const statusLabel = (s) => ({ new: '🆕 Yangi', seen: "👁 Ko'rildi", done: '✅ Yakunlandi' }[s] || s || '—');
+
+  return (
+    <div>
+      <h2 className="pageTitle">💬 Foydalanuvchi fikrlari</h2>
+      <p className="pageDesc">/web/feedback — baho va izohlar, holat boshqaruvi</p>
+
+      <div className="toolbar" style={{ flexWrap: 'wrap', gap: '8px' }}>
+        <div className="field">
+          <label>Turi</label>
+          <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+            <option value="">— barchasi —</option>
+            <option value="general">💬 Umumiy</option>
+            <option value="bug">🐛 Xato</option>
+            <option value="idea">💡 Taklif</option>
+            <option value="content">📚 Kontent</option>
+            <option value="nps">⭐ NPS</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Holat</label>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">— barchasi —</option>
+            <option value="new">🆕 Yangi</option>
+            <option value="seen">👁 Ko'rildi</option>
+            <option value="done">✅ Yakunlandi</option>
+          </select>
+        </div>
+        <button onClick={() => { setPage(1); load(); }}>🔍 Qidirish</button>
+      </div>
+
+      {loading ? (
+        <p className="muted">Yuklanmoqda...</p>
+      ) : items.length === 0 ? (
+        <p className="muted">Fikrlar topilmadi.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Foydalanuvchi</th>
+              <th>Baho</th>
+              <th>Turi</th>
+              <th>Xabar</th>
+              <th>Holat</th>
+              <th>Sana</th>
+              <th>Amallar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((fb, i) => (
+              <tr key={fb.id || i}>
+                <td>{fmtCell(fb.user_name || fb.user_id)}</td>
+                <td>{fb.rating ? '⭐'.repeat(fb.rating) : '—'}</td>
+                <td>{kindLabel(fb.kind)}</td>
+                <td style={{ maxWidth: '240px', wordBreak: 'break-word' }}>{fmtCell(fb.message)}</td>
+                <td><span className="pill">{statusLabel(fb.status)}</span></td>
+                <td>{fmtCell(fb.created_at)}</td>
+                <td>
+                  <div className="actions">
+                    <button className="sm" onClick={() => setSelected(fb)}>👁 Ko'rish</button>
+                    <select
+                      value={fb.status || 'new'}
+                      onChange={(e) => handleStatusChange(fb, e.target.value)}
+                      style={{ fontSize: '12px', padding: '2px 4px', background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '4px' }}
+                    >
+                      <option value="new">Yangi</option>
+                      <option value="seen">Ko'rildi</option>
+                      <option value="done">Yakunlandi</option>
+                    </select>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="pager">
+        <button className="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Oldingi</button>
+        <span>Sahifa {page} / {totalPages} — jami: {count}</span>
+        <button className="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Keyingi →</button>
+      </div>
+
+      {selected && (
+        <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}>
+          <div className="modal" style={{ maxWidth: '540px' }}>
+            <h3>Fikr tafsilotlari</h3>
+            <div className="kv card" style={{ marginBottom: '14px' }}>
+              <div><span className="k">ID:</span>{selected.id}</div>
+              <div><span className="k">Foydalanuvchi:</span>{selected.user_name || selected.user_id || '—'}</div>
+              <div><span className="k">Baho:</span>{selected.rating ? `${'⭐'.repeat(selected.rating)} (${selected.rating}/5)` : '—'}</div>
+              <div><span className="k">Turi:</span>{kindLabel(selected.kind)}</div>
+              <div><span className="k">Holat:</span><span className="pill">{statusLabel(selected.status)}</span></div>
+              <div><span className="k">Kontekst:</span>{fmtCell(selected.context)}</div>
+              <div><span className="k">Ilova versiyasi:</span>{fmtCell(selected.app_version)}</div>
+              <div><span className="k">Sana:</span>{fmtCell(selected.created_at)}</div>
+            </div>
+            {selected.message && (
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontWeight: 500, marginBottom: '6px', fontSize: '13px' }}>Xabar:</div>
+                <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', padding: '10px 14px', fontSize: '14px', lineHeight: 1.6 }}>
+                  {selected.message}
+                </div>
+              </div>
+            )}
+            <div className="field" style={{ marginBottom: '14px' }}>
+              <label>Holatni o'zgartirish</label>
+              <select
+                value={selected.status || 'new'}
+                onChange={(e) => handleStatusChange(selected, e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <option value="new">🆕 Yangi</option>
+                <option value="seen">👁 Ko'rildi</option>
+                <option value="done">✅ Yakunlandi</option>
+              </select>
+            </div>
+            <div className="modalFooter">
+              <button className="primary" onClick={() => setSelected(null)}>Yopish</button>
+            </div>
           </div>
         </div>
       )}
