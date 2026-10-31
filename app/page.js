@@ -3537,6 +3537,7 @@ function SettingsPanel({ api, addToast }) {
   const [refReferred, setRefReferred] = useState(20);
   const [savingReferral, setSavingReferral] = useState(false);
   const [showDeprecated, setShowDeprecated] = useState(false);
+  const [settingIsNew, setSettingIsNew] = useState(true);
 
   const loadDailyFreeCoins = async () => {
     try {
@@ -3564,6 +3565,7 @@ function SettingsPanel({ api, addToast }) {
       await api('/web/setting/daily-free-coins', { method: 'PUT', body: { daily_free_coins: val } });
       addToast('Kunlik bepul tangalar saqlandi', 'ok');
       loadDailyFreeCoins();
+      load();
     } catch {} finally {
       setSavingDailyCoins(false);
     }
@@ -3683,11 +3685,48 @@ function SettingsPanel({ api, addToast }) {
     }
   };
 
+  const reservedSettingMessage = (key) => {
+    if (key === 'daily_free_coins') return "Kunlik bepul tangalar yuqoridagi kartada o'zgartiriladi.";
+    if (key === 'coins_per_1k_tokens') return "Token narxi yuqoridagi kartada o'zgartiriladi.";
+    if (key === 'referral_reward_referrer_coins' || key === 'referral_reward_referred_coins') {
+      return "Referral tangalari yuqoridagi kartada o'zgartiriladi.";
+    }
+    if (key === 'medium_reward_multiplier' || key === 'hard_reward_multiplier') {
+      return "Qiyinlik koeffitsienti yuqoridagi kartada o'zgartiriladi.";
+    }
+    if (key === 'practice_images_enabled') return "AI tibbiy tasvirlar yuqoridagi kartada yoqiladi yoki o'chiriladi.";
+    return '';
+  };
+
+  const openNewSetting = () => {
+    setSettingIsNew(true);
+    setFormKey('');
+    setFormVal('');
+    setIsModalOpen(true);
+  };
+
+  const openEditSetting = (row) => {
+    setSettingIsNew(false);
+    setFormKey(row.key || '');
+    setFormVal(typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value ?? ''));
+    setIsModalOpen(true);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
+    const key = formKey.trim();
+    if (!key) {
+      addToast("Kalit nomini yozing", 'err');
+      return;
+    }
+    const reserved = reservedSettingMessage(key);
+    if (reserved) {
+      addToast(reserved, 'err');
+      return;
+    }
     try {
-      await api('/web/setting', { method: 'PUT', body: { key: formKey, value: formVal } });
-      addToast("Sozlama saqlandi", "ok");
+      await api('/web/setting', { method: 'PUT', body: { key, value: formVal } });
+      addToast(settingIsNew ? "Sozlama qo'shildi" : "Sozlama saqlandi", "ok");
       setIsModalOpen(false);
       load();
     } catch {}
@@ -3696,7 +3735,7 @@ function SettingsPanel({ api, addToast }) {
   return (
     <div>
       <h2 className="pageTitle">Tizim sozlamalari</h2>
-      <p className="pageDesc">/web/setting — key/value (value JSON string sifatida)</p>
+      <p className="pageDesc">Asosiy sozlamalar shu sahifadagi kartalarda. Pastdagi ro'yxat faqat qo'shimcha kalitlar uchun.</p>
 
       {/* Pay-as-you-go card */}
       <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
@@ -3711,10 +3750,14 @@ function SettingsPanel({ api, addToast }) {
             <input
               type="number"
               min="0"
+              step="1"
               required
               value={dailyFreeCoins}
               onChange={(e) => setDailyFreeCoins(e.target.value)}
             />
+            <p className="muted" style={{ marginTop: '6px', fontSize: '12px' }}>
+              Yangi son keyingi kundan beriladi. Bugun olingan tangalar o'zgarmaydi.
+            </p>
           </div>
           <div className="modalFooter">
             <button type="submit" className="primary" disabled={savingDailyCoins}>
@@ -3860,86 +3903,108 @@ function SettingsPanel({ api, addToast }) {
         </ul>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
-        <button className="primary" onClick={() => { setFormKey('daily_free_coins'); setFormVal('10'); setIsModalOpen(true); }}>
-          + Sozlama qo'shish / yangilash
-        </button>
+      <div className="card" style={{ marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Qo'shimcha sozlamalar</h3>
+            <p className="muted" style={{ margin: '6px 0 0', maxWidth: '640px' }}>
+              Kunlik tanga, token narxi va referral yuqoridagi kartalarda tahrirlanadi. Bu yerga yangi kalit qo'shiladi yoki shu ro'yxatdagi kalit o'zgartiriladi.
+            </p>
+          </div>
+          <button type="button" className="primary" onClick={openNewSetting}>
+            Yangi sozlama
+          </button>
+        </div>
         {settings.some(s => ['coin_to_uzs_rate', 'voice_enabled', 'daily_free_limit'].includes(s.key)) && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', color: 'var(--muted)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', color: 'var(--muted)', marginBottom: '12px' }}>
             <input
               type="checkbox"
               checked={showDeprecated}
               onChange={(e) => setShowDeprecated(e.target.checked)}
             />
-            Bekor qilingan / arxiv sozlamalarni ko'rsatish
+            Eski, endi ishlatilmaydigan sozlamalarni ko'rsatish
           </label>
         )}
-      </div>
-
-      <div>
-        {settings.length === 0 ? (
-          <p className="muted">Sozlamalar topilmadi.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th>Value</th>
-                <th>Yangilangan</th>
-                <th>Amallar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {settings
-                .filter(s => showDeprecated || !['coin_to_uzs_rate', 'voice_enabled', 'daily_free_limit'].includes(s.key))
-                .map((s, idx) => {
-                  const isDep = ['coin_to_uzs_rate', 'voice_enabled', 'daily_free_limit'].includes(s.key);
+        {(() => {
+          const archived = ['coin_to_uzs_rate', 'voice_enabled', 'daily_free_limit'];
+          const reserved = ['daily_free_coins', 'coins_per_1k_tokens', 'referral_reward_referrer_coins', 'referral_reward_referred_coins', 'medium_reward_multiplier', 'hard_reward_multiplier', 'practice_images_enabled'];
+          const rows = settings.filter(s => {
+            if (reserved.includes(s.key)) return false;
+            if (archived.includes(s.key)) return showDeprecated;
+            return true;
+          });
+          if (rows.length === 0) {
+            return <p className="muted" style={{ margin: 0 }}>Qo'shimcha sozlama yo'q.</p>;
+          }
+          return (
+            <table>
+              <thead>
+                <tr>
+                  <th>Kalit</th>
+                  <th>Qiymat</th>
+                  <th>Yangilangan</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((s, idx) => {
+                  const isArchived = archived.includes(s.key);
                   return (
-                    <tr key={s.key || idx} style={isDep ? { opacity: 0.6 } : {}}>
+                    <tr key={s.key || idx} style={isArchived ? { opacity: 0.6 } : undefined}>
                       <td>
                         <code>{s.key}</code>
-                        {isDep && <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--danger)', border: '1px solid currentColor', borderRadius: '4px', padding: '1px 5px' }}>bekor qilingan</span>}
+                        {isArchived && <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--danger)', border: '1px solid currentColor', borderRadius: '4px', padding: '1px 5px' }}>eski</span>}
                       </td>
                       <td>{fmtCell(s.value)}</td>
                       <td>{fmtCell(s.updated_at)}</td>
                       <td>
-                        <button className="sm" onClick={() => { setFormKey(s.key); setFormVal(typeof s.value === 'object' ? JSON.stringify(s.value) : String(s.value || '')); setIsModalOpen(true); }}>
-                          ✏️ Tahrir
+                        <button type="button" className="sm" onClick={() => openEditSetting(s)}>
+                          Tahrirlash
                         </button>
                       </td>
                     </tr>
                   );
                 })}
-            </tbody>
-          </table>
-        )}
+              </tbody>
+            </table>
+          );
+        })()}
       </div>
 
       {isModalOpen && (
         <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
           <div className="modal">
-            <h3>Sozlama saqlash</h3>
+            <h3>{settingIsNew ? "Yangi sozlama" : "Sozlamani tahrirlash"}</h3>
+            <p className="muted" style={{ marginTop: 0 }}>
+              {settingIsNew
+                ? "Yangi kalit qo'shiladi. Kunlik tanga, token narxi va referral bu yerdan yozilmaydi."
+                : "Kalit nomi o'zgarmaydi. Faqat qiymat yangilanadi."}
+            </p>
             <form onSubmit={handleSave}>
               <div className="field">
-                <label>Key *</label>
+                <label>Kalit nomi *</label>
                 <input
                   type="text"
                   required
+                  readOnly={!settingIsNew}
                   value={formKey}
+                  placeholder="masalan: support_phone"
                   onChange={(e) => setFormKey(e.target.value)}
                 />
               </div>
               <div className="field">
-                <label>Value (JSON string, masalan: 3)</label>
+                <label>Qiymat</label>
                 <textarea
                   rows={3}
                   value={formVal}
+                  placeholder="masalan: 3"
                   onChange={(e) => setFormVal(e.target.value)}
                 />
+                <p className="muted" style={{ margin: 0, fontSize: '12px' }}>Matn sifatida saqlanadi. Son bo'lsa faqat raqam yozing.</p>
               </div>
               <div className="modalFooter">
                 <button type="button" onClick={() => setIsModalOpen(false)}>Bekor qilish</button>
-                <button type="submit" className="primary">Saqlash</button>
+                <button type="submit" className="primary">{settingIsNew ? "Qo'shish" : "Saqlash"}</button>
               </div>
             </form>
           </div>
