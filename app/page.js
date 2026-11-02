@@ -856,13 +856,13 @@ const MODULE_CONFIGS = {
     label: "Levellar",
     base: '/web/level',
     noPagination: true,
-    columns: ['id', 'level_number', 'slug', 'required_xp', 'xp_reward', 'coin_reward', 'title'],
+    columns: ['id', 'level_number', 'slug', 'required_stars', 'stars_reward', 'coin_reward', 'title'],
     search: [],
     fields: [
       { name: 'level_number', label: 'Level raqami', type: 'number', required: true },
       { name: 'slug', label: 'Slug (o\'zgarmas kod)', type: 'text', required: true },
-      { name: 'required_xp', label: 'Kerakli XP', type: 'number' },
-      { name: 'xp_reward', label: 'Bazaviy XP mukofoti (shu level uchun)', type: 'number' },
+      { name: 'required_stars', label: 'Kerakli yulduz', type: 'number' },
+      { name: 'stars_reward', label: 'Bazaviy yulduz mukofoti (shu level uchun)', type: 'number' },
       { name: 'coin_reward', label: 'Bazaviy coin mukofoti (shu level uchun)', type: 'number' },
       { name: 'title', label: 'Sarlavha', type: 'text' },
       { name: 'badge_image_url', label: 'Belgi rasmi (URL)', type: 'file' }
@@ -2530,7 +2530,7 @@ function UserPanel({ api, addToast }) {
               <th>Telefon</th>
               <th>Email</th>
               <th>Level</th>
-              <th>XP</th>
+              <th>Yulduz</th>
               <th>Coins</th>
               <th>Ro'yxatdan o'tgan</th>
               <th>Amallar</th>
@@ -2544,7 +2544,7 @@ function UserPanel({ api, addToast }) {
                 <td>{fmtCell(u.phone_number)}</td>
                 <td>{fmtCell(u.email)}</td>
                 <td>{fmtCell(u.level)}</td>
-                <td>{fmtCell(u.xp)}</td>
+                <td>{fmtCell(u.stars)}</td>
                 <td>{fmtCell(u.coins)}</td>
                 <td>{fmtCell(u.created_at)}</td>
                 <td>
@@ -2582,8 +2582,8 @@ function UserPanel({ api, addToast }) {
                 <div className="l">Level</div>
               </div>
               <div className="card">
-                <div className="v">{selectedUser.xp ?? 0}</div>
-                <div className="l">XP</div>
+                <div className="v">{selectedUser.stars ?? 0}</div>
+                <div className="l">Yulduz</div>
               </div>
               <div className="card">
                 <div className="v">🪙 {selectedUser.coins ?? 0}</div>
@@ -3788,7 +3788,7 @@ function SettingsPanel({ api, addToast }) {
       </div>
 
       <div className="card" style={{ marginBottom: '18px', maxWidth: '520px' }}>
-        <h3 style={{ marginTop: 0 }}>Qiyinlik koeffitsienti (XP / coin)</h3>
+        <h3 style={{ marginTop: 0 }}>Qiyinlik koeffitsienti (yulduz / tanga)</h3>
         <p className="muted" style={{ marginBottom: '10px' }}>
           /web/setting/difficulty-reward — mukofot = level bazasi × koeffitsient × (ball / 100). Easy = 1x (o'zgarmaydi).
         </p>

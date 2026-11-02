@@ -867,12 +867,12 @@ const MODULES = {
   level: {
     label:'Levellar', base:'/web/level', listKey:null,
     search:[],
-    columns:['id','level_number','slug','required_xp','xp_reward','coin_reward','title'],
+    columns:['id','level_number','slug','required_stars','stars_reward','coin_reward','title'],
     fields:[
       {name:'level_number', label:'Level raqami', type:'number', required:true},
       {name:'slug', label:'Slug (o\'zgarmas kod)', type:'text', required:true},
-      {name:'required_xp', label:'Kerakli XP', type:'number'},
-      {name:'xp_reward', label:'Case yakunida XP (bazaviy)', type:'number'},
+      {name:'required_stars', label:'Kerakli yulduz', type:'number'},
+      {name:'stars_reward', label:'Case yakunida yulduz (bazaviy)', type:'number'},
       {name:'coin_reward', label:'Case yakunida Coin (bazaviy)', type:'number'},
       {name:'title', label:'Sarlavha', type:'text'},
       {name:'badge_image_url', label:'Belgi rasmi', type:'file'},
@@ -1180,11 +1180,11 @@ async function renderUsers(){
     if(!items.length){ tableWrap.innerHTML='<p class="muted">Topilmadi</p>'; }
     else {
       const table = document.createElement('table');
-      table.innerHTML = '<thead><tr><th>ID</th><th>Ism</th><th>Telefon</th><th>Email</th><th>Level</th><th>XP</th><th>Coins</th><th>Ro\'yxatdan o\'tgan</th><th>Amallar</th></tr></thead>';
+      table.innerHTML = '<thead><tr><th>ID</th><th>Ism</th><th>Telefon</th><th>Email</th><th>Level</th><th>Yulduz</th><th>Coins</th><th>Ro\'yxatdan o\'tgan</th><th>Amallar</th></tr></thead>';
       const tbody = document.createElement('tbody');
       items.forEach(u=>{
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td>'+fmtCell(u.id)+'</td><td>'+fmtCell(u.name)+'</td><td>'+fmtCell(u.phone_number)+'</td><td>'+fmtCell(u.email)+'</td><td>'+fmtCell(u.level)+'</td><td>'+fmtCell(u.xp)+'</td><td>'+fmtCell(u.coins)+'</td><td>'+fmtCell(u.created_at)+'</td>';
+        tr.innerHTML = '<td>'+fmtCell(u.id)+'</td><td>'+fmtCell(u.name)+'</td><td>'+fmtCell(u.phone_number)+'</td><td>'+fmtCell(u.email)+'</td><td>'+fmtCell(u.level)+'</td><td>'+fmtCell(u.stars)+'</td><td>'+fmtCell(u.coins)+'</td><td>'+fmtCell(u.created_at)+'</td>';
         const td = document.createElement('td'); const actions=document.createElement('div'); actions.className='actions';
         const vb=document.createElement('button'); vb.className='sm'; vb.textContent='👁 Ko\'rish';
         vb.onclick=async()=>{
@@ -1478,7 +1478,7 @@ async function renderSettings(){
   main.innerHTML = '<h2 class="pageTitle">Tizim sozlamalari</h2><p class="pageDesc">/web/setting — key/value (value JSON string sifatida)</p>';
 
   // --- Mukofot sozlamalari: bazaviy XP/Coin endi "Levellar" sahifasida (har bir
-  // foydalanuvchi darajasi - Level 1/2/3... - o'zining xp_reward/coin_reward'iga
+  // foydalanuvchi darajasi - Level 1/2/3... - o'zining stars_reward/coin_reward'iga
   // ega). Bu yerda faqat case qiyinlik darajasi (easy/medium/hard) koeffitsienti -
   // "medium"/"hard" case'lar bazaviy mukofotni necha barobar ko'paytirishi.
   // Yakuniy qiymat bundan tashqari health_percent'ga (sog'liq %, ya'ni qanchalik
@@ -1486,7 +1486,7 @@ async function renderSettings(){
   // harakat qilingan bo'lsa mukofot 0 (SimulationService.Finish). ---
   const rewardCard = document.createElement('div'); rewardCard.className='card'; rewardCard.style.marginBottom='16px';
   rewardCard.innerHTML = '<div class="v" style="font-size:16px;margin-bottom:4px">🏆 Mukofot sozlamalari (case qiyinlik koeffitsienti)</div>'+
-    '<div class="l" style="margin-bottom:10px">Bazaviy XP/Coin foydalanuvchining darajasiga qarab beriladi (tahrirlash: '+
+    '<div class="l" style="margin-bottom:10px">Bazaviy yulduz va tanga foydalanuvchining darajasiga qarab beriladi (tahrirlash: '+
     '<b>"Levellar"</b> sahifasi). Bu yerda faqat "O\'rta"/"Qiyin" case\'lar bazaviy mukofotni necha barobar oshirishi belgilanadi '+
     '("Oson" har doim 1x). Yakuniy qiymat sog\'liq foiziga (qobiliyat/to\'g\'ri bajarish darajasiga) mutanosib beriladi.</div>';
   const rewardGrid = document.createElement('div');
