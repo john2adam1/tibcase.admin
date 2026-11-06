@@ -1,8 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { FinancePanel, AiCostPanel, EngagementPanel, UserStatsBlock, DashboardSummary } from './StatsPanels';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'https://dev.tibstation.uz').replace(/\/$/, '');
+
+// Brend belgisi: oq "yurak urishi" chizig'i (gradient fon ustida)
+function LogoIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
+    </svg>
+  );
+}
 
 export default function AdminApp() {
   const [token, setToken] = useState('');
@@ -23,6 +33,27 @@ export default function AdminApp() {
   const [passwordInput, setPasswordInput] = useState('1234');
   const [loginErr, setLoginErr] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
+
+  // Mavzu (dark/light) va mobil menyu
+  const [theme, setTheme] = useState('dark');
+  const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('ts_theme');
+    const initial = saved || (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    setTheme(initial);
+    document.documentElement.dataset.theme = initial;
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('ts_theme', next);
+  };
+
+  // Bo'lim almashganda mobil menyu yopiladi
+  useEffect(() => { setNavOpen(false); }, [currentTab]);
 
   // Toasts
   const [toasts, setToasts] = useState([]);
@@ -219,6 +250,7 @@ export default function AdminApp() {
     return (
       <div id="loginScreen">
         <div className="loginBox">
+          <div className="logoMark"><LogoIcon size={28} /></div>
           <h1>TibSphereAI Admin</h1>
           <p>Admin hisobi bilan tizimga kiring</p>
           {loginErr && <div id="loginErr">{loginErr}</div>}
@@ -262,21 +294,68 @@ export default function AdminApp() {
     <div id="app">
       {/* Topbar */}
       <div id="topbar">
-        <div className="brand">🩺 TibSphereAI Admin</div>
+        <div className="brandWrap">
+          <button
+            className="iconBtn menuBtn"
+            aria-label="Menyuni ochish"
+            onClick={() => setNavOpen(o => !o)}
+          >
+            {navOpen ? '✕' : '☰'}
+          </button>
+          <div className="brand">
+            <span className="logoMark"><LogoIcon /></span>
+            <span>TibSphereAI <small>Admin</small></span>
+          </div>
+        </div>
         <div className="right">
-          <span>Rol: {role || '—'} · ID: {uid || '—'}</span>
+          <button
+            className="iconBtn"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Yorug\' mavzu' : 'Qorong\'i mavzu'}
+            aria-label="Mavzuni almashtirish"
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+          <div className="userChip" title={`Rol: ${role || '—'} · ID: ${uid || '—'}`}>
+            <span className="avatar">{(role || 'A').charAt(0)}</span>
+            <div className="who">
+              <b>{role || '—'}</b>
+              <span>{uid || '—'}</span>
+            </div>
+          </div>
           <button className="sm" onClick={handleLogout}>Chiqish</button>
         </div>
       </div>
 
       {/* Sidebar Navigation */}
-      <div id="sidebar">
+      <div className={`sidebarBackdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
+      <div id="sidebar" className={navOpen ? 'open' : ''}>
         <div className="grp">Umumiy</div>
         <button
           className={`nav ${currentTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setCurrentTab('dashboard')}
         >
           📊 Dashboard
+        </button>
+
+        <div className="grp">Statistika</div>
+        <button
+          className={`nav ${currentTab === 'stats_finance' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('stats_finance')}
+        >
+          💰 Moliya
+        </button>
+        <button
+          className={`nav ${currentTab === 'stats_ai_cost' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('stats_ai_cost')}
+        >
+          🤖 AI xarajati
+        </button>
+        <button
+          className={`nav ${currentTab === 'stats_engagement' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('stats_engagement')}
+        >
+          📈 Faollik
         </button>
 
         <div className="grp">Kontent</div>
@@ -347,12 +426,6 @@ export default function AdminApp() {
           onClick={() => setCurrentTab('flashcard_stats')}
         >
           🃏 Fleshkartalar
-        </button>
-        <button
-          className={`nav ${currentTab === 'level' ? 'active' : ''}`}
-          onClick={() => setCurrentTab('level')}
-        >
-          🏅 Levellar
         </button>
         <button
           className={`nav ${currentTab === 'ai_prompt' ? 'active' : ''}`}
@@ -448,7 +521,10 @@ export default function AdminApp() {
 
       {/* Main Area */}
       <div id="main">
-        {currentTab === 'dashboard' && <DashboardPanel api={api} addToast={addToast} />}
+        {currentTab === 'dashboard' && <DashboardPanel api={api} onGo={setCurrentTab} />}
+        {currentTab === 'stats_finance' && <FinancePanel api={api} />}
+        {currentTab === 'stats_ai_cost' && <AiCostPanel api={api} />}
+        {currentTab === 'stats_engagement' && <EngagementPanel api={api} />}
         {currentTab === 'banner' && <GenericPanel key="banner" moduleKey="banner" api={api} addToast={addToast} />}
         {currentTab === 'about' && <GenericPanel key="about" moduleKey="about" api={api} addToast={addToast} />}
         {currentTab === 'faq' && <GenericPanel key="faq" moduleKey="faq" api={api} addToast={addToast} />}
@@ -462,7 +538,6 @@ export default function AdminApp() {
         {currentTab === 'source' && <SourcePanel api={api} addToast={addToast} />}
         {currentTab === 'practice_stats' && <PracticeStatsPanel api={api} />}
         {currentTab === 'flashcard_stats' && <FlashcardStatsPanel api={api} />}
-        {currentTab === 'level' && <GenericPanel key="level" moduleKey="level" api={api} addToast={addToast} />}
         {currentTab === 'ai_prompt' && <AiPromptPanel api={api} addToast={addToast} />}
 
         {currentTab === 'tariff' && <GenericPanel key="tariff" moduleKey="tariff" api={api} addToast={addToast} />}
@@ -512,9 +587,20 @@ function extractList(json) {
   return { items: [], count: 0 };
 }
 
+// Holat so'zlari rangli belgi (pill) bo'lib ko'rinadi
+const STATUS_PILLS = {
+  active: 'ok', used: 'info', expired: 'err', published: 'ok', draft: 'warn',
+  new: 'warn', seen: 'info', done: 'ok', ready: 'ok', failed: 'err', processing: 'warn',
+  paid: 'ok', pending: 'warn', success: 'ok', completed: 'ok', finished: 'ok',
+  cancelled: 'err', canceled: 'err', error: 'err', abandoned: 'err', easy: 'ok', medium: 'warn', hard: 'err'
+};
+
 function fmtCell(v) {
   if (v === null || v === undefined || v === '') return <span className="muted">—</span>;
   if (typeof v === 'boolean') return v ? '✅' : '⬜️';
+  if (typeof v === 'string' && STATUS_PILLS[v.toLowerCase()]) {
+    return <span className={`pill ${STATUS_PILLS[v.toLowerCase()]}`}>{v}</span>;
+  }
   if (typeof v === 'object') {
     if (v.uz !== undefined || v.ru !== undefined || v.en !== undefined) {
       return v.uz || v.ru || v.en || '';
@@ -612,7 +698,7 @@ function UploadButton({ onDone, api, addToast }) {
 /* ============================================================
    DASHBOARD PANEL
    ============================================================ */
-function DashboardPanel({ api }) {
+function DashboardPanel({ api, onGo }) {
   const [data, setData] = useState(null);
   const [type, setType] = useState('');
   const [day, setDay] = useState('');
@@ -633,13 +719,12 @@ function DashboardPanel({ api }) {
   }, []);
 
   const items = [
-    ["Bo'limlar", data?.categories],
-    ["Case'lar", data?.cases],
-    ["Foydalanuvchilar", data?.users],
-    ["Faol foydalanuvchilar", data?.active_users],
-    ["Faol obunalar", data?.active_subscriptions],
-    ["Yakunlangan sessiyalar", data?.completed_sessions],
-    ["AI xarajat (USD)", data?.ai_total_cost_usd]
+    ['📁', "Bo'limlar", data?.categories],
+    ['👥', "Foydalanuvchilar", data?.users],
+    ['🟢', "Faol foydalanuvchilar", data?.active_users],
+    ['💳', "Faol obunalar", data?.active_subscriptions],
+    ['✅', "Yakunlangan sessiyalar", data?.completed_sessions],
+    ['🤖', "AI xarajat (USD)", data?.ai_total_cost_usd]
   ];
 
   return (
@@ -675,13 +760,16 @@ function DashboardPanel({ api }) {
       </div>
 
       <div className="cards">
-        {items.map(([l, v]) => (
+        {items.map(([ico, l, v]) => (
           <div key={l} className="card">
+            <div className="ico">{ico}</div>
             <div className="v">{v ?? '—'}</div>
             <div className="l">{l}</div>
           </div>
         ))}
       </div>
+
+      <DashboardSummary api={api} onGo={onGo} />
     </div>
   );
 }
@@ -851,22 +939,6 @@ const MODULE_CONFIGS = {
       { name: 'slug', label: 'Slug', type: 'text', required: true }
     ],
     onSaved: () => invalidateRef('role')
-  },
-  level: {
-    label: "Levellar",
-    base: '/web/level',
-    noPagination: true,
-    columns: ['id', 'level_number', 'slug', 'required_stars', 'stars_reward', 'coin_reward', 'title'],
-    search: [],
-    fields: [
-      { name: 'level_number', label: 'Level raqami', type: 'number', required: true },
-      { name: 'slug', label: 'Slug (o\'zgarmas kod)', type: 'text', required: true },
-      { name: 'required_stars', label: 'Kerakli yulduz', type: 'number' },
-      { name: 'stars_reward', label: 'Bazaviy yulduz mukofoti (shu level uchun)', type: 'number' },
-      { name: 'coin_reward', label: 'Bazaviy coin mukofoti (shu level uchun)', type: 'number' },
-      { name: 'title', label: 'Sarlavha', type: 'text' },
-      { name: 'badge_image_url', label: 'Belgi rasmi (URL)', type: 'file' }
-    ]
   },
   notification: {
     label: "Bildirishnomalar",
@@ -1297,13 +1369,13 @@ function GenericPanel({ moduleKey, api, addToast }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: '#0e1726',
-              border: '1px solid #334155',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border-strong)',
               padding: '10px 14px',
               borderRadius: '6px',
               fontFamily: 'monospace',
               fontSize: '15px',
-              color: '#38bdf8',
+              color: 'var(--info-text)',
               marginBottom: '16px'
             }}>
               <span>{refreshedPw.password}</span>
@@ -1924,11 +1996,11 @@ function CasePanel({ api, addToast }) {
             <h3>Excel/CSV yuklash natijasi</h3>
             <p className="muted" style={{ marginBottom: '10px' }}>{importResult.fileName}</p>
             <p style={{ marginBottom: '6px' }}>
-              Jami qatorlar: <b>{importResult.total ?? 0}</b> · Yaratildi: <b style={{ color: '#34d399' }}>{importResult.created ?? 0}</b>
-              {' '}· Nashr: <b>{importResult.published ?? 0}</b> · Xato: <b style={{ color: '#f87171' }}>{importResult.failed ?? 0}</b>
+              Jami qatorlar: <b>{importResult.total ?? 0}</b> · Yaratildi: <b style={{ color: 'var(--ok-text)' }}>{importResult.created ?? 0}</b>
+              {' '}· Nashr: <b>{importResult.published ?? 0}</b> · Xato: <b style={{ color: 'var(--danger-text)' }}>{importResult.failed ?? 0}</b>
             </p>
             {(importResult.errors || []).length > 0 && (
-              <div style={{ maxHeight: '220px', overflow: 'auto', marginTop: '10px', fontSize: '12px', color: '#fca5a5', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px' }}>
+              <div style={{ maxHeight: '220px', overflow: 'auto', marginTop: '10px', fontSize: '12px', color: 'var(--danger-text)', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px' }}>
                 {importResult.errors.map((er, i) => (
                   <div key={i}>Qator {er.row}: {er.message}</div>
                 ))}
@@ -1949,7 +2021,7 @@ function CasePanel({ api, addToast }) {
             <h3>Ommaviy AI generatsiya</h3>
             <form onSubmit={handleAiBatchSubmit}>
               {aiBatchErr && (
-                <div style={{ color: '#fca5a5', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', maxHeight: '160px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                <div style={{ color: 'var(--danger-text)', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', maxHeight: '160px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   <strong>Xato:</strong> {aiBatchErr}
                 </div>
               )}
@@ -2066,7 +2138,7 @@ function CasePanel({ api, addToast }) {
               {!editingCase && (
                 <>
                   {createErr && (
-                    <div style={{ color: '#fca5a5', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', maxHeight: '160px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    <div style={{ color: 'var(--danger-text)', background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.4)', borderRadius: '6px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', maxHeight: '160px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       <strong>Xato:</strong> {createErr}
                     </div>
                   )}
@@ -2439,14 +2511,18 @@ function UserPanel({ api, addToast }) {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [filters, setFilters] = useState({ name: '', email: '', phone_number: '' });
+  const [filters, setFilters] = useState({
+    name: '', email: '', phone_number: '',
+    created_from: '', created_to: '', inactive_days: '',
+    has_subscription: '', paid: '', sort_by: ''
+  });
   const [selectedUser, setSelectedUser] = useState(null);
   const [refreshedPw, setRefreshedPw] = useState(null);
 
-  const load = async () => {
+  const load = async (f = filters) => {
     setLoading(true);
     try {
-      const res = await api('/web/user', { query: { ...filters, limit, page } });
+      const res = await api('/web/user', { query: { ...f, limit, page } });
       const extracted = extractList(res);
       setUsers(extracted.items);
       setCount(extracted.count);
@@ -2484,6 +2560,20 @@ function UserPanel({ api, addToast }) {
 
   const totalPages = Math.max(1, Math.ceil((count || users.length) / limit));
 
+  const handleSearch = () => { if (page === 1) load(); else setPage(1); };
+  const resetFilters = () => {
+    const empty = {
+      name: '', email: '', phone_number: '',
+      created_from: '', created_to: '', inactive_days: '',
+      has_subscription: '', paid: '', sort_by: ''
+    };
+    setFilters(empty);
+    if (page === 1) load(empty); else setPage(1);
+  };
+  const dt = (s) => (typeof s === 'string' && s ? s.slice(0, 16) : null);
+  const usd = (n) => (typeof n === 'number' ? `$${n.toFixed(2)}` : null);
+  const uzs = (n) => (typeof n === 'number' ? `${Math.round(n).toLocaleString('en-US').replace(/,/g, ' ')} so'm` : null);
+
   return (
     <div>
       <h2 className="pageTitle">Foydalanuvchilar</h2>
@@ -2514,7 +2604,51 @@ function UserPanel({ api, addToast }) {
             placeholder="Telefon"
           />
         </div>
-        <button onClick={() => { setPage(1); load(); }}>🔍 Qidirish</button>
+        <div className="field">
+          <label>Ro'yxatdan o'tgan (dan)</label>
+          <input type="date" value={filters.created_from} onChange={(e) => setFilters({ ...filters, created_from: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Ro'yxatdan o'tgan (gacha)</label>
+          <input type="date" value={filters.created_to} onChange={(e) => setFilters({ ...filters, created_to: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Necha kundan beri faol emas</label>
+          <input
+            type="number" min="1" value={filters.inactive_days}
+            onChange={(e) => setFilters({ ...filters, inactive_days: e.target.value })}
+            placeholder="masalan, 7"
+          />
+        </div>
+        <div className="field">
+          <label>Obuna</label>
+          <select value={filters.has_subscription} onChange={(e) => setFilters({ ...filters, has_subscription: e.target.value })}>
+            <option value="">Hammasi</option>
+            <option value="true">Obunasi bor</option>
+            <option value="false">Obunasi yo'q</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>To'lov</label>
+          <select value={filters.paid} onChange={(e) => setFilters({ ...filters, paid: e.target.value })}>
+            <option value="">Hammasi</option>
+            <option value="true">To'lagan</option>
+            <option value="false">To'lamagan</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Saralash</label>
+          <select value={filters.sort_by} onChange={(e) => setFilters({ ...filters, sort_by: e.target.value })}>
+            <option value="">Standart</option>
+            <option value="created_at">Ro'yxatdan o'tgan sana</option>
+            <option value="last_active">Oxirgi faollik</option>
+            <option value="ai_cost">AI xarajati</option>
+            <option value="paid">To'lagan puli</option>
+            <option value="sessions">Sessiyalar soni</option>
+          </select>
+        </div>
+        <button className="primary" onClick={handleSearch}>🔍 Qidirish</button>
+        <button onClick={resetFilters}>Tozalash</button>
       </div>
 
       {loading ? (
@@ -2522,6 +2656,7 @@ function UserPanel({ api, addToast }) {
       ) : users.length === 0 ? (
         <p className="muted">Foydalanuvchilar topilmadi.</p>
       ) : (
+        <div style={{ overflowX: 'auto' }}>
         <table>
           <thead>
             <tr>
@@ -2529,9 +2664,14 @@ function UserPanel({ api, addToast }) {
               <th>Ism</th>
               <th>Telefon</th>
               <th>Email</th>
-              <th>Level</th>
               <th>Yulduz</th>
               <th>Coins</th>
+              <th>Oxirgi faollik</th>
+              <th>Sessiyalar</th>
+              <th>AI xarajati</th>
+              <th>To'lagan</th>
+              <th>Obuna</th>
+              <th>Platforma</th>
               <th>Ro'yxatdan o'tgan</th>
               <th>Amallar</th>
             </tr>
@@ -2539,20 +2679,31 @@ function UserPanel({ api, addToast }) {
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
-                <td>{fmtCell(u.id)}</td>
+                <td title={u.id}>{typeof u.id === 'string' ? `${u.id.slice(0, 8)}…` : fmtCell(u.id)}</td>
                 <td>{fmtCell(u.name)}</td>
                 <td>{fmtCell(u.phone_number)}</td>
                 <td>{fmtCell(u.email)}</td>
-                <td>{fmtCell(u.level)}</td>
                 <td>{fmtCell(u.stars)}</td>
                 <td>{fmtCell(u.coins)}</td>
-                <td>{fmtCell(u.created_at)}</td>
+                <td>{fmtCell(dt(u.stats?.last_active_at))}</td>
+                <td>{fmtCell(u.stats?.sessions_count)}</td>
+                <td>{fmtCell(usd(u.stats?.ai_cost_usd))}</td>
+                <td>{fmtCell(uzs(u.stats?.paid_uzs))}</td>
+                <td>
+                  {u.stats?.has_subscription
+                    ? <span className="pill ok" title={u.stats.subscription_until || ''}>
+                        {u.stats.subscription_until ? `~ ${u.stats.subscription_until.slice(0, 10)}` : 'Bor'}
+                      </span>
+                    : <span className="muted">—</span>}
+                </td>
+                <td>{fmtCell(u.stats?.platform)}</td>
+                <td>{fmtCell(dt(u.created_at))}</td>
                 <td>
                   <div className="actions">
                     <button className="sm" onClick={async () => {
                       try {
                         const full = await api(`/web/user/${u.id}`);
-                        setSelectedUser(full);
+                        setSelectedUser({ ...u, ...full, stats: full?.stats || u.stats });
                       } catch {}
                     }}>👁 Ko'rish</button>
                     <button className="sm" title="Yangi parol generatsiya qilish" onClick={() => handleRefreshUserPassword(u)}>🔑 Parol</button>
@@ -2563,6 +2714,7 @@ function UserPanel({ api, addToast }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <div className="pager">
@@ -2573,14 +2725,10 @@ function UserPanel({ api, addToast }) {
 
       {selectedUser && (
         <div className="modalOverlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedUser(null); }}>
-          <div className="modal" style={{ maxWidth: '560px' }}>
+          <div className="modal" style={{ maxWidth: '760px' }}>
             <h3>Foydalanuvchi ma'lumotlari: {selectedUser.name || selectedUser.id}</h3>
             
             <div className="cards" style={{ marginBottom: '16px' }}>
-              <div className="card">
-                <div className="v">{selectedUser.level ?? 1}</div>
-                <div className="l">Level</div>
-              </div>
               <div className="card">
                 <div className="v">{selectedUser.stars ?? 0}</div>
                 <div className="l">Yulduz</div>
@@ -2588,10 +2736,6 @@ function UserPanel({ api, addToast }) {
               <div className="card">
                 <div className="v">🪙 {selectedUser.coins ?? 0}</div>
                 <div className="l">Tangalar</div>
-              </div>
-              <div className="card">
-                <div className="v">🔥 {selectedUser.streak_count ?? 0}</div>
-                <div className="l">Streak</div>
               </div>
             </div>
 
@@ -2603,6 +2747,23 @@ function UserPanel({ api, addToast }) {
               <div><span className="k">Mutaxassislik:</span>{selectedUser.specialization || '—'}</div>
               <div><span className="k">Ilova tili:</span>{selectedUser.language || 'uz'}</div>
               <div><span className="k">Ro'yxatdan o'tgan:</span>{selectedUser.created_at || '—'}</div>
+              {selectedUser.stats && (
+                <>
+                  <div><span className="k">Oxirgi faollik:</span>{selectedUser.stats.last_active_at || '—'}</div>
+                  <div><span className="k">Ro'yxatdan o'tish usuli:</span>{selectedUser.stats.signup_method || '—'}</div>
+                  <div><span className="k">Platforma:</span>{selectedUser.stats.platform || '—'} {selectedUser.stats.app_version ? `(v${selectedUser.stats.app_version})` : ''}</div>
+                  <div><span className="k">Obuna:</span>{selectedUser.stats.has_subscription ? `bor${selectedUser.stats.subscription_until ? `, ${selectedUser.stats.subscription_until.slice(0, 10)} gacha` : ''}` : "yo'q"}</div>
+                  <div><span className="k">AI xarajati:</span>{typeof selectedUser.stats.ai_cost_usd === 'number' ? `$${selectedUser.stats.ai_cost_usd.toFixed(2)}` : '—'} ({selectedUser.stats.ai_tokens ?? 0} token)</div>
+                  <div><span className="k">To'lagan:</span>{typeof selectedUser.stats.paid_uzs === 'number' ? `${Math.round(selectedUser.stats.paid_uzs).toLocaleString('en-US').replace(/,/g, ' ')} so'm` : '—'} ({selectedUser.stats.orders_count ?? 0} ta buyurtma)</div>
+                  <div><span className="k">Sessiyalar / sarflangan tanga:</span>{selectedUser.stats.sessions_count ?? 0} / {selectedUser.stats.coins_spent ?? 0}</div>
+                  <div><span className="k">Fikrlar soni:</span>{selectedUser.stats.feedback_count ?? 0}</div>
+                </>
+              )}
+            </div>
+
+            <h4 style={{ margin: '0 0 8px' }}>Faollik statistikasi</h4>
+            <div style={{ marginBottom: '14px' }}>
+              <UserStatsBlock api={api} userId={selectedUser.id} />
             </div>
 
             <details style={{ marginBottom: '14px', cursor: 'pointer' }}>
@@ -2639,13 +2800,13 @@ function UserPanel({ api, addToast }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: '#0e1726',
-              border: '1px solid #334155',
+              background: 'var(--input-bg)',
+              border: '1px solid var(--border-strong)',
               padding: '10px 14px',
               borderRadius: '6px',
               fontFamily: 'monospace',
               fontSize: '15px',
-              color: '#38bdf8',
+              color: 'var(--info-text)',
               marginBottom: '16px'
             }}>
               <span>{refreshedPw.password}</span>
@@ -3008,9 +3169,9 @@ function CoinMonitoringPanel({ api }) {
                 <td>{fmtCell(t.user_name || t.user_id)}</td>
                 <td>
                   {t.delta > 0 ? (
-                    <span style={{ color: '#4ade80' }}>+{t.delta}</span>
+                    <span style={{ color: 'var(--ok-text)' }}>+{t.delta}</span>
                   ) : (
-                    <span style={{ color: '#f87171' }}>{t.delta}</span>
+                    <span style={{ color: 'var(--danger-text)' }}>{t.delta}</span>
                   )}
                 </td>
                 <td><span className={`pill ${t.reason === 'ai_usage' ? 'ok' : ''}`}>{t.reason === 'ai_usage' ? '🤖 ai_usage' : fmtCell(t.reason)}</span></td>
@@ -4488,8 +4649,8 @@ function SourcePanel({ api, addToast }) {
   };
 
   const statusBadge = (s) => {
-    const color = s === 'ready' ? '#10b981' : s === 'failed' ? '#ef4444' : '#f59e0b';
-    return <span style={{ color, fontWeight: 600 }}>{s}</span>;
+    const cls = s === 'ready' ? 'ok' : s === 'failed' ? 'err' : 'warn';
+    return <span className={`pill ${cls}`}>{s}</span>;
   };
 
   const totalPages = Math.max(1, Math.ceil((count || items.length) / limit));
@@ -4723,9 +4884,7 @@ function PracticeStatsPanel({ api }) {
     ['Elementlar', data?.items],
     ['Javoblar', data?.answered],
     ["To'g'ri javoblar ulushi", pct(data?.correct_rate)],
-    ['Sarflangan tokenlar', data?.tokens_used ?? data?.tokens],
-    ['Sarflangan tangalar', data?.coins_spent],
-    ['Fleshkartalar yaratilgan', data?.flashcards_created],
+    ['Sarflangan tokenlar', data?.tokens],
     ['Shikoyatlar', data?.reports]
   ];
 
@@ -4825,25 +4984,30 @@ function FlashcardStatsPanel({ api }) {
 
   useEffect(() => { load(); }, []);
 
-  const pct = (v) => (typeof v === 'number' ? `${Math.round(v * 10) / 10}%` : '—');
+  // Ulush 0..1 bo'lsa foizga o'giradi, 1 dan katta bo'lsa tayyor foiz deb oladi
+  const pct = (v) => {
+    if (typeof v !== 'number') return '—';
+    const p = v <= 1 ? v * 100 : v;
+    return `${Math.round(p * 10) / 10}%`;
+  };
 
   const statCards = data ? [
-    ["Jami kartalar", data.total],
-    ["Hozir takrorlanishi kerak", data.due_now],
-    ["Bugun takrorlanishi kerak", data.due_today],
-    ["Yangi (o'qilmagan)", data.new],
-    ["O'zlashtirilgan", data.learned],
+    ["Jami kartalar", data.total_cards],
+    ["To'plamlar soni", data.total_decks],
+    ["Kartasi bor foydalanuvchilar", data.users_with_cards],
     ["Bugun bajarilgan takrorlar", data.reviews_today],
-    ["30 kun eslab qolish", pct(data.retention_30d)],
-    ["To'plamlar soni", data.decks],
-    ["Joriy streak", data.streak_count],
-    ["Eng uzun streak", data.longest_streak]
+    ["Bugun takrorlagan foydalanuvchilar", data.active_reviewers_today],
+    ["Bugun yaratilgan kartalar", data.generated_today],
+    ["O'zlashtirish (interval ≥ 21 kun)", pct(data.mastery_rate)],
+    ["30 kun eslab qolish", pct(data.retention_30d)]
   ] : [];
+
+  const weakTopics = Array.isArray(data?.weak_topics) ? data.weak_topics : [];
 
   return (
     <div>
       <h2 className="pageTitle">🃏 Fleshkartalar statistikasi</h2>
-      <p className="pageDesc">/web/flashcard/stats — jami kartalar, takrorlashlar, eslab qolish</p>
+      <p className="pageDesc">/web/flashcard/stats — jami kartalar, takrorlashlar, o'zlashtirish, eslab qolish, zaif mavzular</p>
 
       <div className="toolbar">
         <button className="primary" onClick={load}>🔄 Yangilash</button>
@@ -4854,14 +5018,40 @@ function FlashcardStatsPanel({ api }) {
       ) : !data ? (
         <p className="muted">Ma'lumot topilmadi.</p>
       ) : (
-        <div className="cards">
-          {statCards.map(([l, v]) => (
-            <div key={l} className="card">
-              <div className="v">{v ?? '—'}</div>
-              <div className="l">{l}</div>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="cards">
+            {statCards.map(([l, v]) => (
+              <div key={l} className="card">
+                <div className="v">{v ?? '—'}</div>
+                <div className="l">{l}</div>
+              </div>
+            ))}
+          </div>
+
+          <h3 style={{ margin: '20px 0 8px' }}>Eng ko'p xato qilinadigan mavzular</h3>
+          {weakTopics.length === 0 ? <p className="muted">Ma'lumot yo'q.</p> : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Mavzu</th>
+                  <th>Javoblar</th>
+                  <th>Xato ulushi</th>
+                  <th>Xatodan yaratilgan kartalar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weakTopics.map((t, i) => (
+                  <tr key={t.topic_id || i}>
+                    <td>{fmtCell(t.name || t.topic_id)}</td>
+                    <td>{t.answered ?? 0}</td>
+                    <td>{pct(t.wrong_rate)}</td>
+                    <td>{t.card_count ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </div>
   );
@@ -4879,25 +5069,36 @@ function FeedbackPanel({ api, addToast }) {
   const [kindFilter, setKindFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selected, setSelected] = useState(null);
+  const [summary, setSummary] = useState(null);
 
-  const load = async () => {
+  // Javob shakli: { list: { data: [...], total, total_pages, ... }, summary: { total, avg_rating, new } }
+  const load = async (pageOverride) => {
+    const p = pageOverride ?? page;
     setLoading(true);
     try {
       const res = await api('/web/feedback', {
-        query: { page, limit, kind: kindFilter || undefined, status: statusFilter || undefined }
+        query: { page: p, limit, kind: kindFilter || undefined, status: statusFilter || undefined }
       });
-      const extracted = extractList(res);
+      const list = res && typeof res.list === 'object' && !Array.isArray(res.list) ? res.list : res;
+      const extracted = extractList(list);
       setItems(extracted.items);
       setCount(extracted.count);
+      setSummary(res && typeof res.summary === 'object' ? res.summary : null);
     } catch {
       setItems([]);
       setCount(0);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => { load(); }, [page]);
+
+  const handleSearch = () => {
+    if (page === 1) load(1);
+    else setPage(1); // useEffect [page] o'zi yuklaydi
+  };
 
   const totalPages = Math.max(1, Math.ceil((count || items.length) / limit));
 
@@ -4939,8 +5140,25 @@ function FeedbackPanel({ api, addToast }) {
             <option value="done">✅ Yakunlandi</option>
           </select>
         </div>
-        <button onClick={() => { setPage(1); load(); }}>🔍 Qidirish</button>
+        <button onClick={handleSearch}>🔍 Qidirish</button>
       </div>
+
+      {summary && (
+        <div className="cards" style={{ marginBottom: '16px' }}>
+          <div className="card"><div className="v">{summary.total ?? '—'}</div><div className="l">Jami fikrlar</div></div>
+          <div className="card"><div className="v">{summary.new ?? '—'}</div><div className="l">🆕 Yangi</div></div>
+          {typeof summary.seen === 'number' && (
+            <div className="card"><div className="v">{summary.seen}</div><div className="l">👁 Ko'rildi</div></div>
+          )}
+          {typeof summary.done === 'number' && (
+            <div className="card"><div className="v">{summary.done}</div><div className="l">✅ Yakunlandi</div></div>
+          )}
+          <div className="card">
+            <div className="v">{summary.avg_rating ? `⭐ ${Math.round(summary.avg_rating * 10) / 10}` : '—'}</div>
+            <div className="l">O'rtacha baho</div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="muted">Yuklanmoqda...</p>
@@ -4966,7 +5184,7 @@ function FeedbackPanel({ api, addToast }) {
                 <td>{fb.rating ? '⭐'.repeat(fb.rating) : '—'}</td>
                 <td>{kindLabel(fb.kind)}</td>
                 <td style={{ maxWidth: '240px', wordBreak: 'break-word' }}>{fmtCell(fb.message)}</td>
-                <td><span className="pill">{statusLabel(fb.status)}</span></td>
+                <td><span className={`pill ${fb.status === 'done' ? 'ok' : fb.status === 'seen' ? 'info' : 'warn'}`}>{statusLabel(fb.status)}</span></td>
                 <td>{fmtCell(fb.created_at)}</td>
                 <td>
                   <div className="actions">
@@ -5003,7 +5221,7 @@ function FeedbackPanel({ api, addToast }) {
               <div><span className="k">Foydalanuvchi:</span>{selected.user_name || selected.user_id || '—'}</div>
               <div><span className="k">Baho:</span>{selected.rating ? `${'⭐'.repeat(selected.rating)} (${selected.rating}/5)` : '—'}</div>
               <div><span className="k">Turi:</span>{kindLabel(selected.kind)}</div>
-              <div><span className="k">Holat:</span><span className="pill">{statusLabel(selected.status)}</span></div>
+              <div><span className="k">Holat:</span><span className={`pill ${selected.status === 'done' ? 'ok' : selected.status === 'seen' ? 'info' : 'warn'}`}>{statusLabel(selected.status)}</span></div>
               <div><span className="k">Kontekst:</span>{fmtCell(selected.context)}</div>
               <div><span className="k">Ilova versiyasi:</span>{fmtCell(selected.app_version)}</div>
               <div><span className="k">Sana:</span>{fmtCell(selected.created_at)}</div>
